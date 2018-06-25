@@ -57,15 +57,6 @@ export class NatsBufferedClient
   private clientOptions: nats.StanOptions|undefined;
 
   /**
-   * Our publish failure count
-   *
-   * @private
-   * @type {0}
-   * @memberof NatsBufferedClient
-   */
-  private publishFailCount = 0;
-
-  /**
    * Indicates if we're processing the buffer
    *
    * @private
@@ -80,24 +71,6 @@ export class NatsBufferedClient
    * @memberof NatsBufferedClient
    */
   private connected = false;
-
-  /**
-   * Our primary connection timer
-   *
-   * @private
-   * @type {NodeJS.Timer}
-   * @memberof NatsBufferedClient
-   */
-  private connectTimer!: NodeJS.Timer;
-
-  /**
-   * Our publish retry timer
-   *
-   * @private
-   * @type {NodeJS.Timer}
-   * @memberof NatsBufferedClient
-   */
-  private republishTimer!: NodeJS.Timer;
 
   /**
    * The connection to the NATS server
@@ -127,18 +100,15 @@ export class NatsBufferedClient
     //
     process.on( 'exit', () =>
     {
-      if ( this.stan )
-      {
-        console.log( '[NATS-BUFFERED-CLIENT] Disconnecting due to exit' );
-        this.disconnect().then( () => console.log( '[NATS-BUFFERED-CLIENT] Disconnected due to exit' ) );
-      }
+      console.log( '[NATS-BUFFERED-CLIENT] EXIT encountered' );
+      this.disconnect().then( () => console.log( '[NATS-BUFFERED-CLIENT] Disconnected due to exit' ) );
     } );
 
     // Close NATS server connection on interupt
     //
     process.on( 'SIGINT', () =>
     {
-      console.log( '[NATS-BUFFERED-CLIENT] Disconnecting due to SIGINT' );
+      console.log( '[NATS-BUFFERED-CLIENT] SIGINT encountered' );
       this.disconnect().then( () => console.log( '[NATS-BUFFERED-CLIENT] Disconnected due to SIGINT' ) );
     } );
   }
@@ -150,7 +120,7 @@ export class NatsBufferedClient
    */
   public async connect( clusterId: string, clientId: string, options?: nats.StanOptions )
   {
-    // Disconnect any previous connection
+    // Disconnect any previous connection (attempt)
     //
     await this.disconnect();
 
@@ -164,39 +134,22 @@ export class NatsBufferedClient
     this.clientId      = clientId;
     this.clientOptions = options;
 
-    // Start a timer for a connection timeout
-    //
-    this.connectTimer = setTimeout( () =>
-    {
-      console.warn( `[NATS-BUFFERED-CLIENT] Failed to connect within our timeout` );
-      this.reconnect();
-    }, this.connectTimeout )
-
     // Listen for connect events
     //
     this.stan.on( 'connect', () =>
     {
       console.log( '[NATS-BUFFERED-CLIENT] Connected' );
-      clearTimeout( this.connectTimer );
       this.connected = true;
 
       // Start processing the buffer
       //
-      this.publishFailCount = 0;
       this.tick();
     } );
 
     this.stan.on( 'error', ( error ) =>
     {
-      clearTimeout( this.connectTimer );
       console.error( '[NATS-BUFFERED-CLIENT] Server error', error );
-
-      // Reconnect in 5 seconds
-      //
-      // this.connectTimer = setTimeout( () =>
-      // {
-      //   this.reconnect();
-      // }, 5000 );
+      this.reconnect();
     } );
 
     this.stan.on( 'disconnect', () =>
@@ -215,6 +168,10 @@ export class NatsBufferedClient
   {
     return new Promise( ( resolve, reject ) =>
     {
+      // Only disconnect when stan client has been created and
+      // if connect has been seen.
+      // If you call stan.close() when not connected an error will be thrown
+      //
       if ( this.stan && this.connected )
       {
         const currentConnection = this.stan;
@@ -226,14 +183,9 @@ export class NatsBufferedClient
       {
         // Not connected
         //
-        console.log( '[NATS-BUFFERED-CLIENT] Not connected so cannot disconnect' );
+        console.log( '[NATS-BUFFERED-CLIENT] Not connected so no need to disconnect' );
         resolve();
       }
-
-      // Stop any pending timers
-      //
-      clearTimeout( this.connectTimer   );
-      clearTimeout( this.republishTimer );
 
       // Cleanup connection properties
       //
@@ -249,12 +201,7 @@ export class NatsBufferedClient
    */
   public reconnect()
   {
-    if ( this.clusterId && this.clusterId )
-    {
-      // Connect will try to close any existing connection or connection attempt
-      //
-      this.connect( this.clusterId, this.clientId, this.clientOptions );
-    }
+    this.connect( this.clusterId, this.clientId, this.clientOptions );
   }
 
   /**
@@ -269,6 +216,7 @@ export class NatsBufferedClient
     // Push onto the end of the buffer
     //
     this.buffer.push( { subject, data } as IBufferItem );
+    console.log( '[NATS-BUFFERED-CLIENT] Added message to buffer', subject, data );
 
     // Resume buffer processing if needed
     //
@@ -320,32 +268,14 @@ export class NatsBufferedClient
             console.error( '[NATS-BUFFERED-CLIENT] Publish failed', error );
             this.buffer.unshift( pub );
 
-            // Increment our failure counter
+            // Reconnect to the server on publish error
             //
-            this.publishFailCount++;
-
-            // If our failure counter has exceeded the threshold we may need to
-            // reconnect to the server
-            //
-            if ( this.publishFailCount > 3 || error.message === 'stan: publish ack timeout' )
-            {
-              console.warn( '[NATS-BUFFERED-CLIENT] Trying to reconnect to server' );
-              this.ticking = false;
-              this.reconnect();
-            }
-            else
-            {
-              // Retry publish
-              //
-              this.republishTimer = setTimeout( () => {
-                this.tick();
-              }, 10 * this.publishFailCount );
-            }
+            console.warn( '[NATS-BUFFERED-CLIENT] Reconnect to server due to publish error' );
+            this.reconnect();
           }
           else
           {
             console.log( '[NATS-BUFFERED-CLIENT] Publish done', pub );
-            this.publishFailCount = 0;
 
             // Next!
             //
