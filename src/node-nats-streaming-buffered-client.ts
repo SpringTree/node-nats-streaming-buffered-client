@@ -86,10 +86,9 @@ export class NatsBufferedClient
    *
    * @param {Stan} stan The NATS connection
    * @param {number} [bufferSize=10] The ring buffer size
-   * @param {number} [connectTimeout=30000] Connection timeout in milliseconds
    * @memberof NatsBufferedClient
    */
-  constructor( bufferSize: number = 10, private connectTimeout = 30000 )
+  constructor( bufferSize: number = 10 )
   {
     // Initialize our ring buffer with the requested size
     //
