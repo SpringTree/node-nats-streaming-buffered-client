@@ -57,15 +57,6 @@ export class NatsBufferedClient
   private clientOptions: nats.StanOptions|undefined;
 
   /**
-   * The connection to the NATS server
-   *
-   * @private
-   * @type {Stan}
-   * @memberof NatsBufferedClient
-   */
-  private stan!: nats.Stan;
-
-  /**
    * Our publish failure count
    *
    * @private
@@ -83,6 +74,15 @@ export class NatsBufferedClient
   private connected = false;
 
   /**
+   * The connection to the NATS server
+   *
+   * @private
+   * @type {Stan}
+   * @memberof NatsBufferedClient
+   */
+  public stan: nats.Stan | undefined;
+
+  /**
    * Creates an instance of NatsBufferedClient
    *
    * @param {Stan} stan The NATS connection
@@ -95,6 +95,28 @@ export class NatsBufferedClient
     //
     this.buffer = new CBuffer( bufferSize );
     this.buffer.overflow = ( data: any ) => this.overflow( data );
+
+    // Close NATS server connection on exit
+    //
+    process.on( 'exit', () =>
+    {
+      if ( this.stan )
+      {
+        console.log( '[NATS-BUFFERED-CLIENT] Disconnecting due to exit' );
+        this.disconnect().then( () => console.log( '[NATS-BUFFERED-CLIENT] Disconnected due to exit' ) );
+      }
+    } );
+
+    // Close NATS server connection on interupt
+    //
+    process.on( 'SIGINT', () =>
+    {
+      if ( this.stan )
+      {
+        console.log( '[NATS-BUFFERED-CLIENT] Disconnecting due to SIGINT' );
+        this.disconnect().then( () => console.log( '[NATS-BUFFERED-CLIENT] Disconnected due to SIGINT' ) );
+      }
+    } );
   }
 
   /**
@@ -112,7 +134,7 @@ export class NatsBufferedClient
       currentConnection.close();
       currentConnection.on( 'disconnect', () =>
       {
-        console.log( '[NATS] Disconnected previous connection' );
+        console.log( '[NATS-BUFFERED-CLIENT] Disconnected previous connection' );
       } );
     }
 
@@ -130,7 +152,7 @@ export class NatsBufferedClient
     //
     this.stan.on( 'connect', () =>
     {
-      console.log( '[NATS] Connected' );
+      console.log( '[NATS-BUFFERED-CLIENT] Connected' );
 
       // Check if the buffer has items
       //
@@ -145,8 +167,27 @@ export class NatsBufferedClient
 
     this.stan.on( 'disconnect', () =>
     {
-      console.log( '[NATS] Disconnected' );
+      console.log( '[NATS-BUFFERED-CLIENT] Disconnected' );
       this.connected = false;
+    } );
+  }
+
+  /**
+   * Closes the NATS server connection
+   *
+   * @returns {Promise<any>}
+   * @memberof NatsBufferedClient
+   */
+  public disconnect(): Promise<any>
+  {
+    return new Promise( ( resolve ) =>
+    {
+      if ( this.stan )
+      {
+        this.stan.on( 'disconnect', resolve );
+        this.stan.close();
+        this.stan = undefined;
+      }
     } );
   }
 
@@ -218,9 +259,9 @@ export class NatsBufferedClient
   {
     const pub: IBufferItem | undefined = this.buffer.first();
 
-    if ( pub )
+    if ( pub && this.stan )
     {
-      this.stan.publish( pub.subject, pub.data, ( error ) =>
+      this.stan.publish( pub.subject, JSON.stringify( pub.data ), ( error ) =>
       {
         if ( error )
         {
@@ -249,6 +290,8 @@ export class NatsBufferedClient
         }
         else
         {
+          console.log( '[NATS-BUFFERED-CLIENT] Publish done', pub );
+
           this.publishFailCount = 0;
 
           // Remove the item from the buffer on successfull publish
