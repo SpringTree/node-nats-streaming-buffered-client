@@ -97,18 +97,36 @@ export class NatsBufferedClient
 
     // Close NATS server connection on exit
     //
-    process.on( 'exit', () =>
+    process.on( 'exit', async () =>
     {
       console.log( '[NATS-BUFFERED-CLIENT] EXIT encountered' );
-      this.disconnect().then( () => console.log( '[NATS-BUFFERED-CLIENT] Disconnected due to exit' ) );
+      try
+      {
+        await this.disconnect();
+        console.log( '[NATS-BUFFERED-CLIENT] Disconnected due to EXIT' );
+      }
+      catch( error )
+      {
+        console.error( '[NATS-BUFFERED-CLIENT] Error during EXIT disconnect', error );
+      }
     } );
 
     // Close NATS server connection on interupt
     //
-    process.on( 'SIGINT', () =>
+    process.on( 'SIGINT', async () =>
     {
       console.log( '[NATS-BUFFERED-CLIENT] SIGINT encountered' );
-      this.disconnect().then( () => console.log( '[NATS-BUFFERED-CLIENT] Disconnected due to SIGINT' ) );
+      try
+      {
+        await this.disconnect();
+        console.log( '[NATS-BUFFERED-CLIENT] Disconnected due to SIGINT' );
+        process.exit();
+      }
+      catch( error )
+      {
+        console.error( '[NATS-BUFFERED-CLIENT] Error during SIGINT disconnect', error );
+        process.exit();
+      }
     } );
   }
 
@@ -121,7 +139,14 @@ export class NatsBufferedClient
   {
     // Disconnect any previous connection (attempt)
     //
-    await this.disconnect();
+    try
+    {
+      await this.disconnect();
+    }
+    catch( error )
+    {
+      console.error( '[NATS-BUFFERED-CLIENT] Error during disconnect', error );
+    }
 
     // Connect to NATS server
     //
