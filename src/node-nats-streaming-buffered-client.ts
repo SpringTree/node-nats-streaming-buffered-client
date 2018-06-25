@@ -1,6 +1,5 @@
-import * as CBuffer from 'CBuffer';
-import * as nats from 'node-nats-streaming';
-
+import CBuffer from 'CBuffer';
+import nats from 'node-nats-streaming';
 
 /**
  * The type of objects we push onto our buffer
@@ -87,14 +86,14 @@ export default class NatsBufferedClient
    * Creates an instance of NatsBufferedClient
    *
    * @param {Stan} stan The NATS connection
-   * @param {number} [bufferSize=2000] The ring buffer size
+   * @param {number} [bufferSize=10] The ring buffer size
    * @memberof NatsBufferedClient
    */
-  constructor( bufferSize: number = 2000 )
+  constructor( bufferSize: number = 10 )
   {
     // Initialize our ring buffer with the requested size
     //
-    this.buffer = CBuffer.default( bufferSize );
+    this.buffer = CBuffer( bufferSize );
     this.buffer.overflow = ( data: any ) => this.overflow( data );
   }
 
@@ -173,7 +172,7 @@ export default class NatsBufferedClient
    * @param {*} data
    * @memberof NatsBufferedClient
    */
-  public publish( subject: string, data: any )
+  public publish( subject: string, data: any ): number
   {
     // Check if the buffer is empty
     //
@@ -189,6 +188,8 @@ export default class NatsBufferedClient
     {
       this.run();
     }
+
+    return this.buffer.length;
   }
 
   /**
