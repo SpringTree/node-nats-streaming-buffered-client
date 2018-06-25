@@ -202,19 +202,17 @@ export class NatsBufferedClient
         currentConnection.on( 'disconnect', resolve );
         currentConnection.on( 'error',      reject  );
         currentConnection.close();
+
+        this.connected = false;
+        this.stan = undefined;
       }
       else
       {
         // Not connected
         //
-        console.log( '[NATS-BUFFERED-CLIENT] Not connected so no need to disconnect' );
+        console.log( '[NATS-BUFFERED-CLIENT] Not connected so no need to disconnect', this.connected, this.stan );
         resolve();
       }
-
-      // Cleanup connection properties
-      //
-      this.stan      = undefined;
-      this.connected = false;
   } );
   }
 
@@ -300,6 +298,10 @@ export class NatsBufferedClient
           else
           {
             console.log( '[NATS-BUFFERED-CLIENT] Publish done', pub );
+
+            // If we can publish we are connected
+            //
+            this.connected = true;
 
             // Next!
             //
