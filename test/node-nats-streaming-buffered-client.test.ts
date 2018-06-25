@@ -1,4 +1,4 @@
-import NatsBufferedClient from "../src/node-nats-streaming-buffered-client"
+import { NatsBufferedClient } from "../src/node-nats-streaming-buffered-client"
 
 /**
  * Library test

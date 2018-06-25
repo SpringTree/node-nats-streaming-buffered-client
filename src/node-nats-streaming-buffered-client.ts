@@ -1,5 +1,5 @@
-import CBuffer from 'CBuffer';
-import nats from 'node-nats-streaming';
+import * as CBuffer from 'CBuffer';
+import * as nats from 'node-nats-streaming';
 
 /**
  * The type of objects we push onto our buffer
@@ -18,7 +18,7 @@ interface IBufferItem
  * @export
  * @class NatsBufferedClient
  */
-export default class NatsBufferedClient
+export class NatsBufferedClient
 {
   /**
    * Our ring buffer instance
@@ -93,7 +93,7 @@ export default class NatsBufferedClient
   {
     // Initialize our ring buffer with the requested size
     //
-    this.buffer = CBuffer( bufferSize );
+    this.buffer = new CBuffer( bufferSize );
     this.buffer.overflow = ( data: any ) => this.overflow( data );
   }
 
