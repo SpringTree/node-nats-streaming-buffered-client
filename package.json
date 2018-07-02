@@ -11,7 +11,7 @@
   "author": "Mark Doeswijk <mark@springtree.nl>",
   "repository": {
     "type": "git",
-    "url": "https://github.com/SpringTree/node-nats-streaming-buffered-client"
+    "url": "https://github.com/springtree/node-nats-streaming-buffered-client"
   },
   "license": "MIT",
   "engines": {
