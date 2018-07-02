@@ -21,6 +21,15 @@ interface IBufferItem
 export class NatsBufferedClient
 {
   /**
+   * The connection to the NATS server
+   *
+   * @private
+   * @type {Stan}
+   * @memberof NatsBufferedClient
+   */
+  public stan: nats.Stan | undefined;
+
+  /**
    * Our ring buffer instance
    *
    * @private
@@ -73,15 +82,6 @@ export class NatsBufferedClient
   private connected = false;
 
   /**
-   * The connection to the NATS server
-   *
-   * @private
-   * @type {Stan}
-   * @memberof NatsBufferedClient
-   */
-  public stan: nats.Stan | undefined;
-
-  /**
    * Creates an instance of NatsBufferedClient
    *
    * @param {Stan} stan The NATS connection
@@ -105,7 +105,7 @@ export class NatsBufferedClient
         await this.disconnect();
         console.log( '[NATS-BUFFERED-CLIENT] Disconnected due to EXIT' );
       }
-      catch( error )
+      catch ( error )
       {
         console.error( '[NATS-BUFFERED-CLIENT] Error during EXIT disconnect', error );
       }
@@ -122,7 +122,7 @@ export class NatsBufferedClient
         console.log( '[NATS-BUFFERED-CLIENT] Disconnected due to SIGINT' );
         process.exit();
       }
-      catch( error )
+      catch ( error )
       {
         console.error( '[NATS-BUFFERED-CLIENT] Error during SIGINT disconnect', error );
         process.exit();
@@ -143,7 +143,7 @@ export class NatsBufferedClient
     {
       await this.disconnect();
     }
-    catch( error )
+    catch ( error )
     {
       console.error( '[NATS-BUFFERED-CLIENT] Error during disconnect', error );
     }
