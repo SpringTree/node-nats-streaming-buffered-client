@@ -14,8 +14,8 @@ npm install node-nats-streaming-buffered-client
 ## Features
 
 - Reconnect logic
-- Ring buffer to store messages
-- Retry and resend messages
+- Ring buffer to store messages to publish
+- Retry to publish messages
 
 ## Importing library
 
