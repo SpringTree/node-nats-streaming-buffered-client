@@ -32,6 +32,7 @@ const reconnectTimeout = 30000;
 const client = new NatsBufferedClient( bufferSize, reconnectTimeout );
 
 // Connect to the NATS server
+// NATS connect options: https://github.com/nats-io/node-nats#connect-options
 //
 const natsOptions = { ... };
 client.connect( 'test-cluster', 'test', natsOptions );
