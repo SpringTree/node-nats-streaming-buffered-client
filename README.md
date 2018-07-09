@@ -1,6 +1,6 @@
 # NATS Streaming Buffered Client
 
-[![Travis](https://img.shields.io/travis/springtree/node-nats-streaming-buffered-client.svg)](https://travis-ci.org/springtree/node-nats-streaming-buffered-client)
+[![Travis](https://travis-ci.com/SpringTree/node-nats-streaming-buffered-client.svg?branch=master)](https://travis-ci.com/SpringTree/node-nats-streaming-buffered-client)
 
 This is a client for the NATS streaming server built for clients that may have an intermittent connection to the server.
 The need for this client arose for IoT devices with 4G connections and to ensure no messages are lost on server upgrades, reboots or mishaps.
