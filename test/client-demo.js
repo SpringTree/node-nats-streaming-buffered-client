@@ -1,8 +1,8 @@
 const NatsBufferedClient = require( '../dist/node-nats-streaming-buffered-client' ).NatsBufferedClient;
 
-// Use a buffersize of 3000
+// Use a buffersize of 3000 and reconnect time of 5s
 //
-const client = new NatsBufferedClient( 3000 );
+const client = new NatsBufferedClient( 3000, 5000 );
 
 // We can publish before connecting
 //
@@ -22,7 +22,7 @@ const interval = setInterval( () =>
   // Publish a message at a random interval of 300-1000ms
   //
   client.publish( 'test-channel', new Date().toISOString() );
-}, Math.max( 300, (Math.random() * 1000).toFixed(0) ) );
+}, 1000 + Math.max( 300, (Math.random() * 1000).toFixed(0) ) );
 
 // Stop all the things when we try to quit
 //
