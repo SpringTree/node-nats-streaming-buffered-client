@@ -162,6 +162,11 @@ export class NatsBufferedClient
     process.on( 'SIGINT', async () =>
     {
       console.log( '[NATS-BUFFERED-CLIENT] SIGINT encountered' );
+
+      // Stop any pending reconnect timers
+      //
+      clearInterval( this.reconnectTimer );
+
       try
       {
         await this.disconnect();
