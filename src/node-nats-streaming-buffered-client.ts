@@ -227,6 +227,16 @@ export class NatsBufferedClient
       console.error( '[NATS-BUFFERED-CLIENT] Server error', error );
     } );
 
+    this.stan.on( 'reconnecting', () =>
+    {
+      console.log( '[NATS-BUFFERED-CLIENT] Reconnecting' );
+    } );
+
+    this.stan.on( 'reconnect', () =>
+    {
+      console.log( '[NATS-BUFFERED-CLIENT] Reconnected' );
+    } );
+
     this.stan.on( 'disconnect', () =>
     {
       console.log( '[NATS-BUFFERED-CLIENT] Disconnected' );
