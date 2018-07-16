@@ -82,6 +82,14 @@ export class NatsBufferedClient
   private clientConnected = false;
 
   /**
+   * Indicator we've reached a connected state at least once with the current stan instance
+   *
+   * @private
+   * @memberof NatsBufferedClient
+   */
+  private initialConnected = false;
+
+  /**
    * The reconnect timer
    *
    * @private
@@ -132,9 +140,10 @@ export class NatsBufferedClient
    *
    * @param {Stan} stan The NATS connection
    * @param {number} [bufferSize=10] The ring buffer size
+   * @param {boolean} [waitForInitialConnect=false] Indicates the client can publish even before connecting. Will also change behaviour of the connect call
    * @memberof NatsBufferedClient
    */
-  constructor( bufferSize: number = 10, private reconnectTimeout = 30000 )
+  constructor( bufferSize: number = 10, private reconnectTimeout = 30000, private waitForInitialConnection = false )
   {
     // Initialize our ring buffer with the requested size
     //
@@ -186,65 +195,79 @@ export class NatsBufferedClient
    *
    * @memberof NatsBufferedClient
    */
-  public async connect( clusterId: string, clientId: string, options?: nats.StanOptions )
+  public connect( clusterId: string, clientId: string, options?: nats.StanOptions ): Promise<boolean>
   {
-    // Disconnect any previous connection (attempt)
-    //
-    try
+    return new Promise( async ( resolve, reject ) =>
     {
-      await this.disconnect();
-    }
-    catch ( error )
-    {
-      console.error( '[NATS-BUFFERED-CLIENT] Error during disconnect', error );
-    }
-
-    // Reset connected state
-    //
-    this.connected = false;
-    this.stan      = undefined;
-
-    // Connect to NATS server
-    //
-    console.log( '[NATS-BUFFERED-CLIENT] Connecting...' );
-    this.stan = nats.connect( clusterId, clientId, options );
-
-    // Store connection parameters
-    //
-    this.clusterId     = clusterId;
-    this.clientId      = clientId;
-    this.clientOptions = options;
-
-    // Listen for connect events
-    //
-    this.stan.on( 'connect', () =>
-    {
-      console.log( '[NATS-BUFFERED-CLIENT] Connected' );
-      this.connected = true;
-
-      // Start processing the buffer
+      // Disconnect any previous connection (attempt)
       //
-      this.tick();
-    } );
+      try
+      {
+        await this.disconnect();
+      }
+      catch ( error )
+      {
+        console.error( '[NATS-BUFFERED-CLIENT] Error during disconnect', error );
+      }
 
-    this.stan.on( 'error', ( error ) =>
-    {
-      console.error( '[NATS-BUFFERED-CLIENT] Server error', error );
-    } );
+      // Reset connected state
+      //
+      this.connected = false;
+      this.stan      = undefined;
 
-    this.stan.on( 'reconnecting', () =>
-    {
-      console.log( '[NATS-BUFFERED-CLIENT] Reconnecting' );
-    } );
+      // Connect to NATS server
+      //
+      console.log( '[NATS-BUFFERED-CLIENT] Connecting...' );
+      this.stan = nats.connect( clusterId, clientId, options );
 
-    this.stan.on( 'reconnect', () =>
-    {
-      console.log( '[NATS-BUFFERED-CLIENT] Reconnected' );
-    } );
+      // Store connection parameters
+      //
+      this.clusterId     = clusterId;
+      this.clientId      = clientId;
+      this.clientOptions = options;
 
-    this.stan.on( 'disconnect', () =>
-    {
-      console.log( '[NATS-BUFFERED-CLIENT] Disconnected' );
+      // Listen for connect events
+      //
+      this.stan.on( 'connect', () =>
+      {
+        console.log( '[NATS-BUFFERED-CLIENT] Connected' );
+        this.connected        = true;
+        this.initialConnected = true;
+
+        // Start processing the buffer
+        //
+        this.tick();
+
+        // Resolve initial connection promise
+        //
+        resolve( true );
+      } );
+
+      this.stan.on( 'error', ( error ) =>
+      {
+        console.error( '[NATS-BUFFERED-CLIENT] Server error', error );
+
+        // Reject initial connection promise
+        //
+        if ( !this.initialConnected ) {
+          reject( error );
+        }
+      } );
+
+      this.stan.on( 'reconnecting', () =>
+      {
+        console.log( '[NATS-BUFFERED-CLIENT] Reconnecting' );
+      } );
+
+      this.stan.on( 'reconnect', () =>
+      {
+        console.log( '[NATS-BUFFERED-CLIENT] Reconnected' );
+      } );
+
+      this.stan.on( 'disconnect', () =>
+      {
+        console.log( '[NATS-BUFFERED-CLIENT] Disconnected' );
+      } );
     } );
   }
 
@@ -302,6 +325,13 @@ export class NatsBufferedClient
    */
   public publish( subject: string, data: any ): number
   {
+    // Don't allow publishing before initial connect if the client is
+    // configured to do so
+    //
+    if ( this.waitForInitialConnection && !this.initialConnected ) {
+      throw new Error( 'Tried to publish before initial connection' );
+    }
+
     // Push onto the end of the buffer
     //
     this.buffer.push( { subject, data } as IBufferItem );
