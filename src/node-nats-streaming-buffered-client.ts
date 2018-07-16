@@ -118,18 +118,18 @@ export class NatsBufferedClient
   public set connected( newConnectedState: boolean )
   {
     this.clientConnected = newConnectedState;
-    console.log( '[NATS-BUFFERED-CLIENT] Client connected status', this.clientConnected );
+    this.logger.log( '[NATS-BUFFERED-CLIENT] Client connected status', this.clientConnected );
 
     // This timer will try to reconnect to the server on prolonged absence
     //
     clearInterval( this.reconnectTimer );
     if ( !this.clientConnected )
     {
-      console.log( '[NATS-BUFFERED-CLIENT] Starting reconnect timer', this.reconnectTimeout );
+      this.logger.log( '[NATS-BUFFERED-CLIENT] Starting reconnect timer', this.reconnectTimeout );
 
       this.reconnectTimer = setInterval( () =>
       {
-        console.log( '[NATS-BUFFERED-CLIENT] Timer triggered reconnect...' );
+        this.logger.log( '[NATS-BUFFERED-CLIENT] Timer triggered reconnect...' );
         this.reconnect();
       }, this.reconnectTimeout );
     }
@@ -143,7 +143,7 @@ export class NatsBufferedClient
    * @param {boolean} [waitForInitialConnect=false] Indicates the client can publish even before connecting. Will also change behaviour of the connect call
    * @memberof NatsBufferedClient
    */
-  constructor( bufferSize: number = 10, private reconnectTimeout = 30000, private waitForInitialConnection = false )
+  constructor( bufferSize: number = 10, private reconnectTimeout = 30000, private waitForInitialConnection = false, private logger = console )
   {
     // Initialize our ring buffer with the requested size
     //
@@ -154,15 +154,15 @@ export class NatsBufferedClient
     //
     process.on( 'exit', async () =>
     {
-      console.log( '[NATS-BUFFERED-CLIENT] EXIT encountered' );
+      this.logger.log( '[NATS-BUFFERED-CLIENT] EXIT encountered' );
       try
       {
         await this.disconnect();
-        console.log( '[NATS-BUFFERED-CLIENT] Disconnected due to EXIT' );
+        this.logger.log( '[NATS-BUFFERED-CLIENT] Disconnected due to EXIT' );
       }
       catch ( error )
       {
-        console.error( '[NATS-BUFFERED-CLIENT] Error during EXIT disconnect', error );
+        this.logger.error( '[NATS-BUFFERED-CLIENT] Error during EXIT disconnect', error );
       }
     } );
 
@@ -170,7 +170,7 @@ export class NatsBufferedClient
     //
     process.on( 'SIGINT', async () =>
     {
-      console.log( '[NATS-BUFFERED-CLIENT] SIGINT encountered' );
+      this.logger.log( '[NATS-BUFFERED-CLIENT] SIGINT encountered' );
 
       // Stop any pending reconnect timers
       //
@@ -179,12 +179,12 @@ export class NatsBufferedClient
       try
       {
         await this.disconnect();
-        console.log( '[NATS-BUFFERED-CLIENT] Disconnected due to SIGINT' );
+        this.logger.log( '[NATS-BUFFERED-CLIENT] Disconnected due to SIGINT' );
         process.exit();
       }
       catch ( error )
       {
-        console.error( '[NATS-BUFFERED-CLIENT] Error during SIGINT disconnect', error );
+        this.logger.error( '[NATS-BUFFERED-CLIENT] Error during SIGINT disconnect', error );
         process.exit();
       }
     } );
@@ -207,7 +207,7 @@ export class NatsBufferedClient
       }
       catch ( error )
       {
-        console.error( '[NATS-BUFFERED-CLIENT] Error during disconnect', error );
+        this.logger.error( '[NATS-BUFFERED-CLIENT] Error during disconnect', error );
       }
 
       // Reset connected state
@@ -217,7 +217,7 @@ export class NatsBufferedClient
 
       // Connect to NATS server
       //
-      console.log( '[NATS-BUFFERED-CLIENT] Connecting...' );
+      this.logger.log( '[NATS-BUFFERED-CLIENT] Connecting...' );
       this.stan = nats.connect( clusterId, clientId, options );
 
       // Store connection parameters
@@ -230,7 +230,7 @@ export class NatsBufferedClient
       //
       this.stan.on( 'connect', () =>
       {
-        console.log( '[NATS-BUFFERED-CLIENT] Connected' );
+        this.logger.log( '[NATS-BUFFERED-CLIENT] Connected' );
         this.connected        = true;
         this.initialConnected = true;
 
@@ -245,7 +245,7 @@ export class NatsBufferedClient
 
       this.stan.on( 'error', ( error ) =>
       {
-        console.error( '[NATS-BUFFERED-CLIENT] Server error', error );
+        this.logger.error( '[NATS-BUFFERED-CLIENT] Server error', error );
 
         // Reject initial connection promise
         //
@@ -256,17 +256,17 @@ export class NatsBufferedClient
 
       this.stan.on( 'reconnecting', () =>
       {
-        console.log( '[NATS-BUFFERED-CLIENT] Reconnecting' );
+        this.logger.log( '[NATS-BUFFERED-CLIENT] Reconnecting' );
       } );
 
       this.stan.on( 'reconnect', () =>
       {
-        console.log( '[NATS-BUFFERED-CLIENT] Reconnected' );
+        this.logger.log( '[NATS-BUFFERED-CLIENT] Reconnected' );
       } );
 
       this.stan.on( 'disconnect', () =>
       {
-        console.log( '[NATS-BUFFERED-CLIENT] Disconnected' );
+        this.logger.log( '[NATS-BUFFERED-CLIENT] Disconnected' );
       } );
     } );
   }
@@ -299,7 +299,7 @@ export class NatsBufferedClient
       {
         // Not connected
         //
-        console.log( '[NATS-BUFFERED-CLIENT] Not connected so no need to disconnect', this.connected, this.stan === undefined );
+        this.logger.log( '[NATS-BUFFERED-CLIENT] Not connected so no need to disconnect', this.connected, this.stan === undefined );
         resolve();
       }
   } );
@@ -312,7 +312,7 @@ export class NatsBufferedClient
    */
   public reconnect()
   {
-    console.log( '[NATS-BUFFERED-CLIENT] Reconnecting...' );
+    this.logger.log( '[NATS-BUFFERED-CLIENT] Reconnecting...' );
     this.connect( this.clusterId, this.clientId, this.clientOptions );
   }
 
@@ -335,7 +335,7 @@ export class NatsBufferedClient
     // Push onto the end of the buffer
     //
     this.buffer.push( { subject, data } as IBufferItem );
-    console.log( '[NATS-BUFFERED-CLIENT] Added message to buffer', subject, data );
+    this.logger.log( '[NATS-BUFFERED-CLIENT] Added message to buffer', subject, data );
 
     // Resume buffer processing if needed
     //
@@ -360,7 +360,7 @@ export class NatsBufferedClient
   {
     // Log when buffer overflows
     //
-    console.log( '[NATS-BUFFERED-CLIENT] Buffer is full. Dropping data:', data );
+    this.logger.log( '[NATS-BUFFERED-CLIENT] Buffer is full. Dropping data:', data );
   }
 
   /**
@@ -384,17 +384,17 @@ export class NatsBufferedClient
         {
           if ( error )
           {
-            console.error( '[NATS-BUFFERED-CLIENT] Publish failed', error );
+            this.logger.error( '[NATS-BUFFERED-CLIENT] Publish failed', error );
             this.buffer.unshift( pub );
 
             // Reconnect to the server on publish error
             //
-            console.warn( '[NATS-BUFFERED-CLIENT] Reconnect to server due to publish error' );
+            this.logger.warn( '[NATS-BUFFERED-CLIENT] Reconnect to server due to publish error' );
             this.reconnect();
           }
           else
           {
-            console.log( '[NATS-BUFFERED-CLIENT] Publish done', pub );
+            this.logger.log( '[NATS-BUFFERED-CLIENT] Publish done', pub );
 
             // If we can publish we are connected
             //
@@ -408,13 +408,13 @@ export class NatsBufferedClient
       }
       else
       {
-        console.log( '[NATS-BUFFERED-CLIENT] Buffer is empty. Going to sleep' );
+        this.logger.log( '[NATS-BUFFERED-CLIENT] Buffer is empty. Going to sleep' );
         this.ticking = false;
       }
     }
     else
     {
-      console.warn( '[NATS-BUFFERED-CLIENT] Buffer tick called when not connected' );
+      this.logger.warn( '[NATS-BUFFERED-CLIENT] Buffer tick called when not connected' );
       this.ticking = false;
     }
   }

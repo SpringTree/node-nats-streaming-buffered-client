@@ -27,9 +27,17 @@ import { NatsBufferedClient } from 'node-nats-streaming-buffered-client'
 // Initialize a client with a buffer of 2000 messages
 // The default reconnect timeout is 30s but can be changed
 //
+// You can instruct the client to wait for the initial connect to succeed before
+// allowing any kind of publishing.
+//
+// You can also provide an alternate logger if you want to use something
+// like bunyan. The same interface as console is asumed
+//
 const bufferSize = 2000;
 const reconnectTimeout = 30000;
-const client = new NatsBufferedClient( bufferSize, reconnectTimeout );
+const waitForInitialConnect = false;
+const logger = console;
+const client = new NatsBufferedClient( bufferSize, reconnectTimeout, waitForInitialConnect, logger );
 
 // Connect to the NATS server
 // NATS connect options: https://github.com/nats-io/node-nats#connect-options
