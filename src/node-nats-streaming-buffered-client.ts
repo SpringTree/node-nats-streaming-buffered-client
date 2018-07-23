@@ -320,10 +320,10 @@ export class NatsBufferedClient
    * Push an item into the buffer to publish it
    *
    * @param {string} subject
-   * @param {*} data
+   * @param {string} data
    * @memberof NatsBufferedClient
    */
-  public publish( subject: string, data: any ): number
+  public publish( subject: string, data: string ): number
   {
     // Don't allow publishing before initial connect if the client is
     // configured to do so
@@ -380,7 +380,7 @@ export class NatsBufferedClient
       const pub: IBufferItem | undefined = this.buffer.shift();
       if ( pub )
       {
-        this.stan.publish( pub.subject, JSON.stringify( pub.data ), ( error ) =>
+        this.stan.publish( pub.subject, pub.data, ( error ) =>
         {
           if ( error )
           {
