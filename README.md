@@ -5,12 +5,6 @@
 This is a client for the NATS streaming server built for clients that may have an intermittent connection to the server.
 The need for this client arose for IoT devices with 4G connections and to ensure no messages are lost on server upgrades, reboots or mishaps.
 
-## Usage
-
-```bash
-npm install node-nats-streaming-buffered-client
-```
-
 ## Features
 
 - Reconnect logic
@@ -18,6 +12,10 @@ npm install node-nats-streaming-buffered-client
 - Retry to publish messages
 
 ## Usage
+
+```bash
+npm install node-nats-streaming-buffered-client
+```
 
 You can import the buffered client class after installing it with npm:
 
