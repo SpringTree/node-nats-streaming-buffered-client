@@ -268,6 +268,16 @@ export class NatsBufferedClient
       {
         this.logger.debug( '[NATS-BUFFERED-CLIENT] Disconnected' );
       } );
+
+      this.stan.on( 'close', () =>
+      {
+        this.logger.debug( '[NATS-BUFFERED-CLIENT] Closed connection' );
+      } );
+
+      this.stan.on( 'permission_error', (error) =>
+      {
+        this.logger.debug( '[NATS-BUFFERED-CLIENT] Permission error', error );
+      } );
     } );
   }
 
