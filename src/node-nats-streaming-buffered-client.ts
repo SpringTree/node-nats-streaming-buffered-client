@@ -110,10 +110,10 @@ export class NatsBufferedClient
     // Build our logger
     //
     this.logger = {
-      debug: console.debug || console.log,
-      log: console.log || console.debug,
-      warn: console.warn,
-      error: console.error,
+      debug: logger.debug || logger.log,
+      log: logger.log || logger.debug,
+      warn: logger.warn,
+      error: logger.error,
     };
 
     this.logger.log( '[NATS-BUFFERED-CLIENT] Constructing...' );
