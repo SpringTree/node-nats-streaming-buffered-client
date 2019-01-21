@@ -110,10 +110,10 @@ export class NatsBufferedClient
     // Build our logger
     //
     this.logger = {
-      debug: logger.debug || logger.log,
-      log: logger.log || logger.debug,
-      warn: logger.warn,
-      error: logger.error,
+      debug: ( message?: any, ...optionalParams: any[] ) => (logger.debug || logger.log).apply( logger, [ message, optionalParams ] ),
+      log: ( message?: any, ...optionalParams: any[] ) => (logger.log || logger.debug).apply( logger, [ message, optionalParams ] ),
+      warn:  ( message?: any, ...optionalParams: any[] ) => logger.warn.apply( logger, [ message, optionalParams ] ),
+      error: ( message?: any, ...optionalParams: any[] ) => logger.error.apply( logger, [ message, optionalParams ] ),
     };
 
     this.logger.log( '[NATS-BUFFERED-CLIENT] Constructing...' );
