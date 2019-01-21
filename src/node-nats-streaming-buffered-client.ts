@@ -82,6 +82,19 @@ export class NatsBufferedClient
   private initialConnected = false;
 
   /**
+   * Logging wrapper
+   *
+   * @private
+   * @memberof NatsBufferedClient
+   */
+  private logger: {
+    debug: ( message?: any, ...optionalParams: any[] ) => void;
+    log: ( message?: any, ...optionalParams: any[] ) => void;
+    warn: ( message?: any, ...optionalParams: any[] ) => void;
+    error: ( message?: any, ...optionalParams: any[] ) => void;
+  };
+
+  /**
    * Creates an instance of NatsBufferedClient
    *
    * @param {number} [bufferSize=10] Size of our publish buffer
@@ -92,8 +105,17 @@ export class NatsBufferedClient
   constructor(
     bufferSize: number = 10,
     private waitForInitialConnection = false,
-    private logger = console )
+    logger = console )
   {
+    // Build our logger
+    //
+    this.logger = {
+      debug: console.debug || console.log,
+      log: console.log || console.debug,
+      warn: console.warn,
+      error: console.error,
+    };
+
     this.logger.log( '[NATS-BUFFERED-CLIENT] Constructing...' );
 
     // Initialize our ring buffer with the requested size
