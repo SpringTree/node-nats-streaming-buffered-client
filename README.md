@@ -1,5 +1,6 @@
 # NATS Streaming Buffered Client
 
+[![npm version](https://badge.fury.io/js/node-nats-streaming-buffered-client.svg)](https://badge.fury.io/js/node-nats-streaming-buffered-client)
 [![Travis](https://travis-ci.com/SpringTree/node-nats-streaming-buffered-client.svg?branch=master)](https://travis-ci.com/SpringTree/node-nats-streaming-buffered-client)
 
 This is a client for the NATS streaming server built for clients that may have an intermittent connection to the server.
@@ -32,10 +33,12 @@ import { NatsBufferedClient } from 'node-nats-streaming-buffered-client'
 // like bunyan. The same interface as console is asumed
 //
 const bufferSize = 2000;
-const reconnectTimeout = 30000;
 const waitForInitialConnect = false;
 const logger = console;
-const client = new NatsBufferedClient( bufferSize, reconnectTimeout, waitForInitialConnect, logger );
+
+// NOTE: constructor parameters have changed in v0.3.0
+//
+const client = new NatsBufferedClient( bufferSize, waitForInitialConnect, logger );
 
 // Connect to the NATS server
 // NATS connect options: https://github.com/nats-io/node-nats#connect-options
@@ -47,10 +50,12 @@ client.connect( 'test-cluster', 'test', natsOptions );
 //
 client.publish( 'my-channel', { content: 'stuff' } );
 
-// Access to NATS client instance is available
+// Access to NATS Streaming client instance is available
 //
-const subsription = client.stan.subscribe( 'topic', ... );
+const subscription = client.stan.subscribe( 'topic', ... );
 ```
+
+The is a more complete test client [here](test/client-demo.js)
 
 ## NPM scripts
 
