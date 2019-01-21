@@ -55,7 +55,21 @@ client.publish( 'my-channel', { content: 'stuff' } );
 const subscription = client.stan.subscribe( 'topic', ... );
 ```
 
-The is a more complete test client [here](test/client-demo.js)
+There is a more complete test client [here](test/client-demo.js)
+
+### A note on nats connect options
+
+The reconnect logic from the nats streaming client relies on these 3 options:
+
+```javascript
+const defaultOptions = {
+  maxReconnectAttempts: -1,
+  reconnect: true,
+  waitOnFirstConnect: true,
+};
+```
+
+Be very careful when supplying your own connect options to not change these unless you know what you're doing.
 
 ## NPM scripts
 
