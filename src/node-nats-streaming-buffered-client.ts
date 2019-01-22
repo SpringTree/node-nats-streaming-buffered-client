@@ -361,7 +361,7 @@ export class NatsBufferedClient
       const pub: IBufferItem | undefined = this.buffer.shift();
       if ( pub )
       {
-        this.stan.publish( pub.subject, pub.data, ( error ) =>
+        this.stan.publish( pub.subject, pub.data, ( error: Error ) =>
         {
           if ( error )
           {
@@ -371,9 +371,25 @@ export class NatsBufferedClient
             //
             this.buffer.unshift( pub );
 
-            // Trigger a reconnect to reset the connection and begin processing again
+            if ( error && error.message === 'stan: publish ack timeout') {
+              this.logger.warn( '[NATS-BUFFERED-CLIENT] Publish time-out detected', error );
+            }
+
+            // A long term disconnect can trigger a bigger issue
+            // The NATS connection might reconnect/resume but the streaming server
+            // may have lost your client id or considers it dead due to missing heartbeats
+            // An error called 'stan: invalid publish request' will occur in this case
+            // If that happens we will manually reconnect to try and restore communication
             //
-            // this.reconnect();
+            if ( error && error.message === 'stan: invalid publish request') {
+              this.reconnect()
+              .then( () => {
+                this.logger.warn( '[NATS-BUFFERED-CLIENT] Completed forced reconnect due to client de-sync', error );
+              })
+              .catch( ( reconnectError ) => {
+                this.logger.error( '[NATS-BUFFERED-CLIENT] Reconnect failed', reconnectError );
+              });
+            }
           }
           else
           {
