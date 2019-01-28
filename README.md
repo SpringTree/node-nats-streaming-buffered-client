@@ -71,6 +71,24 @@ const defaultOptions = {
 
 Be very careful when supplying your own connect options to not change these unless you know what you're doing.
 
+### Forced reconnects and subscriptions
+
+If the client loses connection with the nats streaming server long enough the server will decide to remove the client.
+The lower level nats layer will reconnect when a connection is restored but publishing will fail becuase the client is not known on the server.
+A forced reconnect will be triggered by the buffered client when this occurs.
+This will re-register the client with the server and publishing will resume.
+
+If you have also created subscriptions these will not resume receiving events because the server reconnected because the subscription state will also have been purged.
+The buffered client will emit a trio of events during a forced reconnect which can be used to re-subscribe.
+These events are:
+
+- forced_reconnecting
+- forced_disconnected
+- forced_reconnected
+
+To prevent memory leaks be sure to call `removeAllListeners` on your old subscription(s).
+The `forced_reconnected` event is a good trigger to begin resubscribing.
+
 ## NPM scripts
 
 - `npm run test`: Run test suite
