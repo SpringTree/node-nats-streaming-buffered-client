@@ -78,8 +78,8 @@ The lower level nats layer will reconnect when a connection is restored but publ
 A forced reconnect will be triggered by the buffered client when this occurs.
 This will re-register the client with the server and publishing will resume.
 
-If you have also created subscriptions these will not resume receiving events because the server reconnected because the subscription state will also have been purged.
-The buffered client will emit a trio of events during a forced reconnect which can be used to re-subscribe.
+If you have also created subscriptions these will not resume receiving events because the subscription state will also have been purged on the server.
+The buffered client will emit a trio of events during a forced reconnect which can be used to resubscribe.
 These events are:
 
 - forced_reconnecting
