@@ -1,4 +1,5 @@
 import * as CBuffer from 'CBuffer';
+import { EventEmitter} from 'events';
 import * as nats from 'node-nats-streaming';
 
 /**
@@ -18,7 +19,7 @@ interface IBufferItem
  * @export
  * @class NatsBufferedClient
  */
-export class NatsBufferedClient
+export class NatsBufferedClient extends EventEmitter
 {
   /**
    * The connection to the NATS server
@@ -110,6 +111,10 @@ export class NatsBufferedClient
     private reconnectDelay = 5000,
   )
   {
+    // Initialise the event emitter super class
+    //
+    super();
+
     // Build our logger
     //
     this.logger = {
@@ -284,9 +289,16 @@ export class NatsBufferedClient
    * Try to reconnect to the NATS server using our stored settings
    *
    * @memberof NatsBufferedClient
+   * @fires forced_reconnecting Event signalling a forced reconnect is starting
+   * @fires forced_disconnected Event signalling forced disconnect completed
+   * @fires forced_reconnected Event signalling forced reconnect completed
    */
   public async reconnect()
   {
+    // Emit a signal that we're starting a hard reconnect
+    //
+    this.emit( 'forced_reconnecting' );
+
     // First close existing connection if still available
     //
     this.logger.log( '[NATS-BUFFERED-CLIENT] Reconnect requested. Disconnecting...' );
@@ -295,6 +307,10 @@ export class NatsBufferedClient
     } catch ( disconnectError ) {
       this.logger.warn( '[NATS-BUFFERED-CLIENT] Error during disconnect', disconnectError );
     }
+
+    // Emit a signal that we've completed a hard disconnect
+    //
+    this.emit( 'forced_disconnected' );
 
     // Create a new connection
     //
@@ -307,6 +323,10 @@ export class NatsBufferedClient
     }
 
     this.logger.log( '[NATS-BUFFERED-CLIENT] Reconnect completed' );
+
+    // Emit a signal that we've completed a hard reconnect
+    //
+    this.emit( 'forced_reconnected', this.stan );
   }
 
   /**
