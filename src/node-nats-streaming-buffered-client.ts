@@ -100,12 +100,15 @@ export class NatsBufferedClient
    * @param {number} [bufferSize=10] Size of our publish buffer
    * @param {boolean} [waitForInitialConnection=false] Allows publishing to the buffer before initial connect
    * @param {*} [logger=console] The console logger to use
+   * @param {number} [reconnectDelay=5000] If reconnect fails retry after this amount of time. Default is 5 seconds
    * @memberof NatsBufferedClient
    */
   constructor(
     bufferSize: number = 10,
     private waitForInitialConnection = false,
-    logger = console )
+    logger = console,
+    private reconnectDelay = 5000,
+  )
   {
     // Build our logger
     //
@@ -287,12 +290,21 @@ export class NatsBufferedClient
     // First close existing connection if still available
     //
     this.logger.log( '[NATS-BUFFERED-CLIENT] Reconnect requested. Disconnecting...' );
-    await this.disconnect();
+    try {
+      await this.disconnect();
+    } catch ( disconnectError ) {
+      this.logger.warn( '[NATS-BUFFERED-CLIENT] Error during disconnect', disconnectError );
+    }
 
     // Create a new connection
     //
     this.logger.log( '[NATS-BUFFERED-CLIENT] Disconnected trying to connect again...' );
-    await this.connect( this.clusterId, this.clientId, this.clientOptions );
+    try {
+      await this.connect( this.clusterId, this.clientId, this.clientOptions );
+    } catch ( connectError ) {
+      this.logger.warn( '[NATS-BUFFERED-CLIENT] Error during connect. Retry in 5 seconds', connectError );
+      setTimeout( () => this.reconnect(), this.reconnectDelay );
+    }
 
     this.logger.log( '[NATS-BUFFERED-CLIENT] Reconnect completed' );
   }
