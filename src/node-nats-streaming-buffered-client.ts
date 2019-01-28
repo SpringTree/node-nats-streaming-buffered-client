@@ -361,17 +361,29 @@ export class NatsBufferedClient
       const pub: IBufferItem | undefined = this.buffer.shift();
       if ( pub )
       {
-        this.stan.publish( pub.subject, pub.data, ( error: Error ) =>
+        this.stan.publish( pub.subject, pub.data, ( error: Error|string ) =>
         {
           if ( error )
           {
             this.logger.error( '[NATS-BUFFERED-CLIENT] Publish failed', error );
+            this.logger.error( '[NATS-BUFFERED-CLIENT] Error type', typeof error );
 
             // Push the item back onto the buffer
             //
             this.buffer.unshift( pub );
 
-            if ( error && error.message === 'stan: publish ack timeout') {
+            // Try to retrieve the actual error message
+            // Errors thrown in the client are normal JS Error objects
+            // Errors returned from the server appear to be strings
+            //
+            let errorMessage;
+            try {
+              errorMessage = typeof error === 'string' ? error : error.message;
+            } catch ( unknownErrorTypeError ) {
+              this.logger.warn( '[NATS-BUFFERED-CLIENT] Failed to interpret error type', error );
+            }
+
+            if ( errorMessage === 'stan: publish ack timeout') {
               this.logger.warn( '[NATS-BUFFERED-CLIENT] Publish time-out detected', error );
             }
 
@@ -381,7 +393,10 @@ export class NatsBufferedClient
             // An error called 'stan: invalid publish request' will occur in this case
             // If that happens we will manually reconnect to try and restore communication
             //
-            if ( error && error.message === 'stan: invalid publish request') {
+            // NOTE: Be cautious about reconnecting. If subscriptions are not closed you
+            //       end up with a client id already registered error
+            //
+            if ( errorMessage === 'stan: invalid publish request') {
               this.reconnect()
               .then( () => {
                 this.logger.warn( '[NATS-BUFFERED-CLIENT] Completed forced reconnect due to client de-sync', error );
