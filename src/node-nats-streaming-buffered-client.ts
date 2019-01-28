@@ -269,8 +269,8 @@ export class NatsBufferedClient extends EventEmitter
       if ( this.stan )
       {
         const currentConnection = this.stan;
-        currentConnection.on( 'disconnect', resolve );
-        currentConnection.on( 'error',      reject  );
+        currentConnection.on( 'close', resolve );
+        currentConnection.on( 'error', reject  );
         currentConnection.close();
 
         this.stan = undefined;
@@ -327,6 +327,8 @@ export class NatsBufferedClient extends EventEmitter
     // Emit a signal that we've completed a hard reconnect
     //
     this.emit( 'forced_reconnected', this.stan );
+
+    return this.stan;
   }
 
   /**
