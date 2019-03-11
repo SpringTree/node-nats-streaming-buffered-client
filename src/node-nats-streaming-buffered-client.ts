@@ -102,13 +102,15 @@ export class NatsBufferedClient extends EventEmitter
    * @param {boolean} [waitForInitialConnection=false] Allows publishing to the buffer before initial connect
    * @param {*} [logger=console] The console logger to use
    * @param {number} [reconnectDelay=5000] If reconnect fails retry after this amount of time. Default is 5 seconds
+   * @param {number} [batchSize=10] Amount of items to publish in 1 tick
    * @memberof NatsBufferedClient
    */
   constructor(
-    bufferSize: number = 10,
+    private bufferSize: number = 10,
     private waitForInitialConnection = false,
     logger = console,
     private reconnectDelay = 5000,
+    private batchSize = 10,
   )
   {
     // Initialise the event emitter super class
@@ -392,68 +394,93 @@ export class NatsBufferedClient extends EventEmitter
 
     if ( this.stan )
     {
-      const pub: IBufferItem | undefined = this.buffer.shift();
-      if ( pub )
-      {
-        this.stan.publish( pub.subject, pub.data, ( error: Error|string ) =>
-        {
-          if ( error )
-          {
-            this.logger.error( '[NATS-BUFFERED-CLIENT] Publish failed', error );
-            this.logger.error( '[NATS-BUFFERED-CLIENT] Error type', typeof error );
+      const batchItems: IBufferItem[] = this.buffer.slice( 0, this.bufferSize );
+      if ( !batchItems.length ) {
+        this.logger.log( '[NATS-BUFFERED-CLIENT] Buffer is empty. Going to sleep' );
+        this.ticking = false;
+      } else {
+
+        // Take the batch out of the buffer
+        // We will push back error items if needed
+        //
+        this.buffer = this.buffer.slice( this.bufferSize );
+
+        // Collect publish promises for the entire batch
+        //
+        const publishBatch: Array<Promise<IBufferItem>> = [];
+
+        // Use a for each to create a function scope so can remember which
+        // pub item fails
+        //
+        batchItems.forEach( ( pub ) => {
+          const publishItem = this.stanPublish( this.stan as nats.Stan, pub );
+          publishBatch.push( publishItem );
+
+          publishItem
+          .then( () => {
+            this.logger.log( '[NATS-BUFFERED-CLIENT] Publish done', pub );
+          } )
+          .catch( ( error ) => {
+            this.logger.error( '[NATS-BUFFERED-CLIENT] Publish failed', pub, error );
+            this.logger.error( '[NATS-BUFFERED-CLIENT] Publish error', error );
 
             // Push the item back onto the buffer
             //
             this.buffer.unshift( pub );
+          } );
+        } );
 
-            // Try to retrieve the actual error message
-            // Errors thrown in the client are normal JS Error objects
-            // Errors returned from the server appear to be strings
-            //
-            let errorMessage;
-            try {
-              errorMessage = typeof error === 'string' ? error : error.message;
-            } catch ( unknownErrorTypeError ) {
-              this.logger.warn( '[NATS-BUFFERED-CLIENT] Failed to interpret error type', error );
-            }
+        Promise.all( publishBatch )
+        .then( () => {
+          this.logger.log( `[NATS-BUFFERED-CLIENT] Buffer utilitisation ${Math.round( this.buffer.length * 100 / this.bufferSize )}%`, this.buffer.length );
 
-            if ( errorMessage === 'stan: publish ack timeout') {
-              this.logger.warn( '[NATS-BUFFERED-CLIENT] Publish time-out detected', error );
-            }
-
-            // A long term disconnect can trigger a bigger issue
-            // The NATS connection might reconnect/resume but the streaming server
-            // may have lost your client id or considers it dead due to missing heartbeats
-            // An error called 'stan: invalid publish request' will occur in this case
-            // If that happens we will manually reconnect to try and restore communication
-            //
-            // NOTE: Be cautious about reconnecting. If subscriptions are not closed you
-            //       end up with a client id already registered error
-            //
-            if ( errorMessage === 'stan: invalid publish request') {
-              this.reconnect()
-              .then( () => {
-                this.logger.warn( '[NATS-BUFFERED-CLIENT] Completed forced reconnect due to client de-sync', error );
-              })
-              .catch( ( reconnectError ) => {
-                this.logger.error( '[NATS-BUFFERED-CLIENT] Reconnect failed', reconnectError );
-              });
-            }
-          }
-          else
-          {
-            this.logger.log( '[NATS-BUFFERED-CLIENT] Publish done', pub );
-          }
-
-          // Next buffer item or retry that last one
+          // Next buffer item batch
           //
           this.tick();
+        } )
+        .catch( ( error ) => {
+          this.logger.error( '[NATS-BUFFERED-CLIENT] Error type', typeof error );
+
+          // Try to retrieve the actual error message
+          // Errors thrown in the client are normal JS Error objects
+          // Errors returned from the server appear to be strings
+          //
+          let errorMessage;
+          try {
+            errorMessage = typeof error === 'string' ? error : error.message;
+          } catch ( unknownErrorTypeError ) {
+            this.logger.warn( '[NATS-BUFFERED-CLIENT] Failed to interpret error type', error );
+          }
+
+          if ( errorMessage === 'stan: publish ack timeout') {
+            this.logger.warn( '[NATS-BUFFERED-CLIENT] Publish time-out detected', error );
+          }
+
+          // A long term disconnect can trigger a bigger issue
+          // The NATS connection might reconnect/resume but the streaming server
+          // may have lost your client id or considers it dead due to missing heartbeats
+          // An error called 'stan: invalid publish request' will occur in this case
+          // If that happens we will manually reconnect to try and restore communication
+          //
+          // NOTE: Be cautious about reconnecting. If subscriptions are not closed you
+          //       end up with a client id already registered error
+          //
+          if ( errorMessage === 'stan: invalid publish request') {
+            this.reconnect()
+            .then( () => {
+              this.logger.warn( '[NATS-BUFFERED-CLIENT] Completed forced reconnect due to client de-sync', error );
+              this.tick();
+            })
+            .catch( ( reconnectError ) => {
+              this.logger.error( '[NATS-BUFFERED-CLIENT] Reconnect failed', reconnectError );
+              this.tick();
+            });
+          } else {
+            // Next buffer item or retry
+            //
+            this.tick();
+          }
         } );
-      }
-      else
-      {
-        this.logger.log( '[NATS-BUFFERED-CLIENT] Buffer is empty. Going to sleep' );
-        this.ticking = false;
       }
     }
     else
@@ -461,5 +488,31 @@ export class NatsBufferedClient extends EventEmitter
       this.logger.warn( '[NATS-BUFFERED-CLIENT] Buffer tick called when not connected' );
       this.ticking = false;
     }
+  }
+
+  /**
+   * Publish item to stan using a promise
+   *
+   * @private
+   * @param {nats.Stan} stan
+   * @param {IBufferItem} pub
+   * @returns {Promise<string>}
+   * @memberof NatsBufferedClient
+   */
+  private stanPublish( stan: nats.Stan, pub: IBufferItem ): Promise<IBufferItem> {
+
+    return new Promise( ( resolve, reject ) => {
+      stan.publish( pub.subject, pub.data, ( error: Error|string ) =>
+      {
+        if ( error )
+        {
+          reject( error );
+        }
+        else
+        {
+          resolve( pub );
+        }
+      } );
+    } );
   }
 }
