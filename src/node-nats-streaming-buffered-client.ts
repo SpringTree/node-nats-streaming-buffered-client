@@ -396,7 +396,7 @@ export class NatsBufferedClient extends EventEmitter
 
     if ( this.stan )
     {
-      const batchItems: IBufferItem[] = this.buffer.slice( 0, this.bufferSize );
+      const batchItems: IBufferItem[] = this.buffer.slice( 0, this.batchSize );
       if ( !batchItems.length ) {
         this.logger.log( '[NATS-BUFFERED-CLIENT] Buffer is empty. Going to sleep' );
         this.ticking = false;
@@ -405,7 +405,7 @@ export class NatsBufferedClient extends EventEmitter
         // Take the batch out of the buffer
         // We will push back error items if needed
         //
-        this.buffer = this.buffer.slice( this.bufferSize );
+        this.buffer = this.buffer.slice( this.batchSize );
 
         // Collect publish promises for the entire batch
         //
@@ -434,7 +434,7 @@ export class NatsBufferedClient extends EventEmitter
 
         Promise.all( publishBatch )
         .then( () => {
-          this.logger.log( `[NATS-BUFFERED-CLIENT] Buffer utilitisation ${Math.round( this.buffer.length * 100 / this.bufferSize )}%`, this.buffer.length );
+          this.logger.log( `[NATS-BUFFERED-CLIENT] Buffer utilisation ${Math.round( this.buffer.length * 100 / this.bufferSize )}%`, this.buffer.length );
 
           // Next buffer item batch
           //
