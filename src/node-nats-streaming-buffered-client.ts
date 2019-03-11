@@ -127,6 +127,8 @@ export class NatsBufferedClient extends EventEmitter
     };
 
     this.logger.log( '[NATS-BUFFERED-CLIENT] Constructing...' );
+    this.logger.log( '[NATS-BUFFERED-CLIENT] Buffer size', this.bufferSize );
+    this.logger.log( '[NATS-BUFFERED-CLIENT] Batch size', this.batchSize );
 
     // Initialize our ring buffer with the requested size
     //
