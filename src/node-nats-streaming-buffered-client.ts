@@ -367,6 +367,26 @@ export class NatsBufferedClient extends EventEmitter
   }
 
   /**
+   * Returns the current amount of items in the buffer
+   *
+   * @returns
+   * @memberof NatsBufferedClient
+   */
+  public count() {
+    return this.buffer.length;
+  }
+
+  /**
+   * Current buffer utilisation as a percentage (0-100)
+   *
+   * @returns
+   * @memberof NatsBufferedClient
+   */
+  public utilisation() {
+    return this.buffer.length * 100 / this.bufferSize;
+  }
+
+  /**
    * Handle buffer overflows. Default behaviour is to log
    * This method is protected to allow extending classes to implement
    * alternate handling like persisting or logging to disk
@@ -434,7 +454,7 @@ export class NatsBufferedClient extends EventEmitter
 
         Promise.all( publishBatch )
         .then( () => {
-          this.logger.log( `[NATS-BUFFERED-CLIENT] Buffer utilisation ${Math.round( this.buffer.length * 100 / this.bufferSize )}%`, this.buffer.length );
+          this.logger.log( `[NATS-BUFFERED-CLIENT] Buffer utilisation ${Math.round( this.utilisation() )}%`, this.count() );
 
           // Next buffer item batch
           //
