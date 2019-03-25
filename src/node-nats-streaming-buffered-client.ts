@@ -462,6 +462,7 @@ export class NatsBufferedClient extends EventEmitter
         } )
         .catch( ( error ) => {
           this.logger.error( '[NATS-BUFFERED-CLIENT] Error type', typeof error );
+          this.logger.log( `[NATS-BUFFERED-CLIENT] Buffer utilisation ${Math.round( this.utilisation() )}%`, this.count() );
 
           // Try to retrieve the actual error message
           // Errors thrown in the client are normal JS Error objects
