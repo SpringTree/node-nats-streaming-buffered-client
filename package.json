@@ -60,7 +60,7 @@
     "collectCoverage": true
   },
   "peerDependencies": {
-    "node-nats-streaming": "^0.0.51"
+    "node-nats-streaming": "^0.2.2"
   },
   "devDependencies": {
     "@commitlint/cli": "^8.0.0",
