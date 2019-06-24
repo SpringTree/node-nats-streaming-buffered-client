@@ -1,26 +1,24 @@
+import ava from 'ava';
 import { NatsBufferedClient } from '../src/node-nats-streaming-buffered-client';
 
 /**
  * Library test
  */
-describe( 'Library test', () =>
+ava( 'NatsBufferedClient is instantiable', ( test ) =>
 {
-  it( 'NatsBufferedClient is instantiable', () =>
-  {
-    expect( new NatsBufferedClient() ).toBeInstanceOf( NatsBufferedClient );
-  } );
+  test.assert( new NatsBufferedClient() instanceof NatsBufferedClient );
+} );
 
-  it( 'NatsBufferedClient is instantiable with buffer size', () =>
-  {
-    expect( new NatsBufferedClient( 100 ) ).toBeInstanceOf( NatsBufferedClient );
-  } );
+ava( 'NatsBufferedClient is instantiable with buffer size', ( test ) =>
+{
+  test.assert( new NatsBufferedClient( 100 ) instanceof NatsBufferedClient );
+} );
 
-  it( 'NatsBufferedClient is instantiable and can publish', () =>
-  {
-    const client = new NatsBufferedClient();
+ava( 'NatsBufferedClient is instantiable and can publish', ( test ) =>
+{
+  const client = new NatsBufferedClient();
 
-    expect( client ).toBeInstanceOf( NatsBufferedClient );
-    expect( client.publish ).toBeDefined();
-    expect( client.publish( 'test', 'test' ) ).toBeGreaterThan( 0 );
-  } );
+  test.assert( client instanceof NatsBufferedClient );
+  test.assert( client.publish );
+  test.assert( client.publish( 'test', 'test' ) > 0 );
 } );
