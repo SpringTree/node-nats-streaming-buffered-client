@@ -525,7 +525,7 @@ export class NatsBufferedClient extends EventEmitter
   private stanPublish( stan: nats.Stan, pub: IBufferItem ): Promise<IBufferItem> {
 
     return new Promise( ( resolve, reject ) => {
-      stan.publish( pub.subject, pub.data, ( error: Error|string ) =>
+      stan.publish( pub.subject, pub.data, ( error: Error|undefined ) =>
       {
         if ( error )
         {
