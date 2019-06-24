@@ -213,6 +213,11 @@ export class NatsBufferedClient extends EventEmitter
         resolve( true );
       } );
 
+      this.stan.on( 'connection_lost', ( error ) =>
+      {
+        this.logger.log( '[NATS-BUFFERED-CLIENT] Connection was lost to server', error );
+      } );
+
       this.stan.on( 'error', ( error ) =>
       {
         this.logger.error( '[NATS-BUFFERED-CLIENT] Server error', error );
