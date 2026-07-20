@@ -1,10 +1,18 @@
-const NatsBufferedClient = require( '../dist/node-nats-streaming-buffered-client' ).NatsBufferedClient;
+const lib = require( '../dist/node-nats-streaming-buffered-client' );
+const NatsBufferedClient = lib.NatsBufferedClient;
+
+// To test crash/restart persistence install the optional dependency
+// (npm install better-sqlite3), uncomment the store lines and pass the
+// store to the client options. Kill this process mid-run and restart
+// it: buffered messages survive
+//
+// const store = new lib.SqliteBufferStore( './demo-buffer.db' );
 
 // Use a buffersize of 3000 and reconnect time of 5s
 // We will instruct the client to not wait for initial connect which
 // allows us to publish even before connecting
 //
-const client = new NatsBufferedClient( 3000, false, console );
+const client = new NatsBufferedClient( { bufferSize: 3000, logger: console /*, store */ } );
 
 const clusterName = 'test-cluster';
 const queueName = 'test-channel';
@@ -15,7 +23,8 @@ let durableSub;
 
 // We can publish before connecting
 //
-client.publish( queueName, 'pre-connect' );
+client.publish( queueName, 'pre-connect' )
+.catch( ( error ) => console.error( '[TEST] Publish failed', error ) );
 
 // Connect to localhost nats streaming server
 // For persistence testing create a volume first: docker create volume local-nats-streaming
@@ -82,13 +91,15 @@ client.connect( clusterName, clientName, opts )
   console.error( '[TEST] Failed to connect', error );
 } );
 
-client.publish( queueName, 'post-connect' );
+client.publish( queueName, 'post-connect' )
+.catch( ( error ) => console.error( '[TEST] Publish failed', error ) );
 
 const interval = setInterval( () =>
 {
   // Publish a message at a random interval of 300-1000ms
   //
-  client.publish( 'test-channel', new Date().toISOString() );
+  client.publish( 'test-channel', new Date().toISOString() )
+  .catch( ( error ) => console.error( '[TEST] Publish failed', error ) );
 }, 1000 + Math.max( 300, (Math.random() * 1000).toFixed(0) ) );
 
 // Stop all the things when we try to quit

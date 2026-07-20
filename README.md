@@ -23,22 +23,16 @@ You can import the buffered client class after installing it with npm:
 ```javascript
 import { NatsBufferedClient } from 'node-nats-streaming-buffered-client'
 
-// Initialize a client with a buffer of 2000 messages
-// The default reconnect timeout is 30s but can be changed
+// All options are optional. Defaults shown here
 //
-// You can instruct the client to wait for the initial connect to succeed before
-// allowing any kind of publishing.
-//
-// You can also provide an alternate logger if you want to use something
-// like bunyan. The same interface as console is asumed
-//
-const bufferSize = 2000;
-const waitForInitialConnect = false;
-const logger = console;
-
-// NOTE: constructor parameters have changed in v0.3.0
-//
-const client = new NatsBufferedClient( bufferSize, waitForInitialConnect, logger );
+const client = new NatsBufferedClient( {
+  bufferSize: 10,                  // Size of the message buffer
+  waitForInitialConnection: false, // Reject publishes before the first connect
+  logger: console,                 // Console-compatible logger (e.g. bunyan)
+  reconnectDelay: 5000,            // Retry delay for forced reconnects (ms)
+  batchSize: 10,                   // Messages published per processing tick
+  store: undefined,                // Optional persistent store (see below)
+} );
 
 // Connect to the NATS server
 // NATS connect options: https://github.com/nats-io/node-nats#connect-options
@@ -46,14 +40,66 @@ const client = new NatsBufferedClient( bufferSize, waitForInitialConnect, logger
 const natsOptions = { ... };
 client.connect( 'test-cluster', 'test', natsOptions );
 
-// Add a message to the buffer for publishing
+// Add a message to the buffer for publishing. publish() is async:
+// a resolved promise means the message is buffered (and, when a store
+// is configured, durably persisted); a rejected promise means the
+// message was NOT accepted
 //
-client.publish( 'my-channel', { content: 'stuff' } );
+await client.publish( 'my-channel', { content: 'stuff' } );
 
 // Access to NATS Streaming client instance is available
 //
 const subscription = client.stan.subscribe( 'topic', ... );
 ```
+
+### Surviving crashes and restarts
+
+By default the message buffer lives in memory and is lost on a crash or
+restart. Pass a persistent store to keep buffered messages safe. A
+SQLite implementation ships with this package; it requires installing
+the optional peer dependency [better-sqlite3](https://www.npmjs.com/package/better-sqlite3):
+
+```bash
+npm install better-sqlite3
+```
+
+When running under [Bun](https://bun.sh) the store uses Bun's built-in
+`bun:sqlite` driver instead and `better-sqlite3` does not need to be
+installed.
+
+```javascript
+import { NatsBufferedClient, SqliteBufferStore } from 'node-nats-streaming-buffered-client'
+
+// Put the database file on a volume mount when running in docker so it
+// survives the container
+//
+const store  = new SqliteBufferStore( '/data/nats-buffer.db' );
+const client = new NatsBufferedClient( { bufferSize: 2000, store } );
+
+await client.connect( 'test-cluster', 'test' );
+```
+
+Every accepted message is written to the store before `publish()`
+resolves and deleted once NATS acknowledges it. On startup, `connect()`
+loads any messages left over from a previous run and publishes them
+first. If the store cannot be read, `connect()` rejects.
+
+Payloads must be strings or JSON-serializable values. `Buffer` payloads
+are not round-tripped correctly by the SQLite store — they get silently
+JSON-serialized into a plain `{ type: 'Buffer', data: [...] }` object
+instead of being preserved, so avoid publishing them when a store is
+configured.
+
+You can plug in your own storage by implementing the `IBufferStore`
+interface (`add`, `remove`, `loadAll`) — a resolved `add` must mean the
+item is durably written. The client never closes a store; whoever
+creates it owns its lifecycle.
+
+### Migrating from v0.x
+
+- The constructor now takes a single options object (see above) instead
+  of positional parameters.
+- `publish()` returns a promise resolving with the buffer length.
 
 There is a more complete test client [here](test/client-demo.js)
 

@@ -1,16 +1,64 @@
 import * as CBuffer from 'CBuffer';
 import { EventEmitter} from 'events';
 import * as nats from 'node-nats-streaming';
+import { IBufferItem, IBufferStore } from './buffer-store';
+
+export { IBufferItem, IBufferStore } from './buffer-store';
+export { SqliteBufferStore } from './sqlite-buffer-store';
 
 /**
- * The type of objects we push onto our buffer
+ * Console-compatible logger contract
  *
- * @interface IBufferItem
+ * @export
+ * @interface ILogger
  */
-interface IBufferItem
+export interface ILogger
 {
-  subject: string;
-  data: any;
+  debug?: ( message?: any, ...optionalParams: any[] ) => void;
+  log: ( message?: any, ...optionalParams: any[] ) => void;
+  warn: ( message?: any, ...optionalParams: any[] ) => void;
+  error: ( message?: any, ...optionalParams: any[] ) => void;
+}
+
+/**
+ * Construction options for the buffered client
+ *
+ * @export
+ * @interface INatsBufferedClientOptions
+ */
+export interface INatsBufferedClientOptions
+{
+  /**
+   * Size of the publish buffer. Default 10
+   */
+  bufferSize?: number;
+
+  /**
+   * When true publishing before the initial connect throws. Default false
+   */
+  waitForInitialConnection?: boolean;
+
+  /**
+   * Console-compatible logger. Default console
+   */
+  logger?: ILogger;
+
+  /**
+   * Retry delay in milliseconds when a forced reconnect fails. Default 5000
+   */
+  reconnectDelay?: number;
+
+  /**
+   * Amount of items to publish per tick. Default 10
+   */
+  batchSize?: number;
+
+  /**
+   * Optional persistent store. When provided every accepted message is
+   * durably written before publish() resolves and restored on connect()
+   * after a restart
+   */
+  store?: IBufferStore;
 }
 
 /**
@@ -75,12 +123,71 @@ export class NatsBufferedClient extends EventEmitter
   private ticking = false;
 
   /**
+   * Size of our publish buffer
+   *
+   * @private
+   * @memberof NatsBufferedClient
+   */
+  private bufferSize: number;
+
+  /**
+   * Allows publishing to the buffer before initial connect
+   *
+   * @private
+   * @memberof NatsBufferedClient
+   */
+  private waitForInitialConnection: boolean;
+
+  /**
+   * If reconnect fails retry after this amount of time
+   *
+   * @private
+   * @memberof NatsBufferedClient
+   */
+  private reconnectDelay: number;
+
+  /**
+   * Amount of items to publish in 1 tick
+   *
+   * @private
+   * @memberof NatsBufferedClient
+   */
+  private batchSize: number;
+
+  /**
+   * Optional persistent message store
+   *
+   * @private
+   * @memberof NatsBufferedClient
+   */
+  private store?: IBufferStore;
+
+  /**
    * Indicator we've reached a connected state at least once with the current stan instance
    *
    * @private
    * @memberof NatsBufferedClient
    */
   private initialConnected = false;
+
+  /**
+   * Indicator we've reached a hydrated state at least once with the
+   * current process. In-flight hydration is tracked by hydratePromise
+   *
+   * @private
+   * @memberof NatsBufferedClient
+   */
+  private hydrated = false;
+
+  /**
+   * Caches the in-flight hydration promise so concurrent connect() calls
+   * share one loadAll() instead of each racing their own, which would
+   * duplicate every stored message into the buffer
+   *
+   * @private
+   * @memberof NatsBufferedClient
+   */
+  private hydratePromise: Promise<void> | undefined;
 
   /**
    * Logging wrapper
@@ -98,30 +205,30 @@ export class NatsBufferedClient extends EventEmitter
   /**
    * Creates an instance of NatsBufferedClient
    *
-   * @param {number} [bufferSize=10] Size of our publish buffer
-   * @param {boolean} [waitForInitialConnection=false] Allows publishing to the buffer before initial connect
-   * @param {*} [logger=console] The console logger to use
-   * @param {number} [reconnectDelay=5000] If reconnect fails retry after this amount of time. Default is 5 seconds
-   * @param {number} [batchSize=10] Amount of items to publish in 1 tick
+   * @param {INatsBufferedClientOptions} [options={}] Construction options for the buffered client
    * @memberof NatsBufferedClient
    */
-  constructor(
-    private bufferSize: number = 10,
-    private waitForInitialConnection = false,
-    logger = console,
-    private reconnectDelay = 5000,
-    private batchSize = 10,
-  )
+  constructor( options: INatsBufferedClientOptions = {} )
   {
     // Initialise the event emitter super class
     //
     super();
 
+    // Apply options with their defaults
+    //
+    this.bufferSize               = options.bufferSize !== undefined ? options.bufferSize : 10;
+    this.waitForInitialConnection = options.waitForInitialConnection === true;
+    this.reconnectDelay           = options.reconnectDelay !== undefined ? options.reconnectDelay : 5000;
+    this.batchSize                = options.batchSize !== undefined ? options.batchSize : 10;
+    this.store                    = options.store;
+
+    const logger: ILogger = options.logger || console;
+
     // Build our logger
     //
     this.logger = {
-      debug: ( message?: any, ...optionalParams: any[] ) => (logger.debug || logger.log).apply( logger, [ message, optionalParams ] ),
-      log: ( message?: any, ...optionalParams: any[] ) => (logger.log || logger.debug).apply( logger, [ message, optionalParams ] ),
+      debug: ( message?: any, ...optionalParams: any[] ) => ( logger.debug || logger.log ).apply( logger, [ message, optionalParams ] ),
+      log: ( message?: any, ...optionalParams: any[] ) => logger.log.apply( logger, [ message, optionalParams ] ),
       warn:  ( message?: any, ...optionalParams: any[] ) => logger.warn.apply( logger, [ message, optionalParams ] ),
       error: ( message?: any, ...optionalParams: any[] ) => logger.error.apply( logger, [ message, optionalParams ] ),
     };
@@ -132,7 +239,7 @@ export class NatsBufferedClient extends EventEmitter
 
     // Initialize our ring buffer with the requested size
     //
-    this.buffer = new CBuffer( bufferSize );
+    this.buffer          = new CBuffer( this.bufferSize );
     this.buffer.overflow = ( data: any ) => this.overflow( data );
 
     // Close NATS server connection on exit
@@ -172,11 +279,17 @@ export class NatsBufferedClient extends EventEmitter
    * @returns {Promise<boolean>}
    * @memberof NatsBufferedClient
    */
-  public connect(
+  public async connect(
     clusterId: string,
     clientId: string,
     options?: nats.StanOptions ): Promise<boolean>
   {
+    // Restore persisted messages before anything else. A configured but
+    // unreadable store rejects the connect: failing loud beats silently
+    // stranding messages. reconnect() retries failed connects on a timer
+    //
+    await this.hydrate();
+
     return new Promise( ( resolve, reject ) =>
     {
       // Store connection parameters
@@ -341,24 +454,38 @@ export class NatsBufferedClient extends EventEmitter
   }
 
   /**
-   * Push an item into the buffer to publish it
+   * Push an item into the buffer to publish it. When a persistent store
+   * is configured the item is durably written before this resolves:
+   * resolved means durably buffered, rejected means not accepted
    *
    * @param {string} subject
-   * @param {string} data
+   * @param {*} data
+   * @returns {Promise<number>} The buffer length after adding the message
    * @memberof NatsBufferedClient
    */
-  public publish( subject: string, data: string ): number
+  public async publish( subject: string, data: any ): Promise<number>
   {
     // Don't allow publishing before initial connect if the client is
     // configured to do so
     //
-    if ( this.waitForInitialConnection && !this.initialConnected ) {
+    if ( this.waitForInitialConnection && !this.initialConnected )
+    {
       throw new Error( 'Tried to publish before initial connection' );
+    }
+
+    const item: IBufferItem = { subject, data };
+
+    // Write through to the persistent store first. A rejected add
+    // rejects this publish and the message is NOT buffered
+    //
+    if ( this.store )
+    {
+      item.id = await this.store.add( item );
     }
 
     // Push onto the end of the buffer
     //
-    this.buffer.push( { subject, data } as IBufferItem );
+    this.buffer.push( item );
     this.logger.log( '[NATS-BUFFERED-CLIENT] Added message to buffer', subject, data );
 
     // Resume buffer processing if needed
@@ -392,7 +519,8 @@ export class NatsBufferedClient extends EventEmitter
   }
 
   /**
-   * Handle buffer overflows. Default behaviour is to log
+   * Handle buffer overflows. Default behaviour is to log the drop and
+   * mirror it to the persistent store when one is configured.
    * This method is protected to allow extending classes to implement
    * alternate handling like persisting or logging to disk
    *
@@ -405,6 +533,41 @@ export class NatsBufferedClient extends EventEmitter
     // Log when buffer overflows
     //
     this.logger.log( '[NATS-BUFFERED-CLIENT] Buffer is full. Dropping data:', data );
+
+    // Keep the store identical to the buffer contents
+    //
+    this.removeFromStore( data as IBufferItem );
+  }
+
+  /**
+   * Load persisted messages from the store into the buffer. Called at
+   * the start of connect(). Safe to call concurrently: overlapping calls
+   * share the same underlying load
+   *
+   * @protected
+   * @returns {Promise<void>}
+   * @memberof NatsBufferedClient
+   */
+  protected hydrate(): Promise<void>
+  {
+    if ( !this.store || this.hydrated )
+    {
+      return Promise.resolve();
+    }
+
+    if ( !this.hydratePromise )
+    {
+      this.hydratePromise = this.doHydrate()
+      .catch( ( error ) =>
+      {
+        // Allow a later connect() to retry after a failed hydration
+        //
+        this.hydratePromise = undefined;
+        throw error;
+      } );
+    }
+
+    return this.hydratePromise;
   }
 
   /**
@@ -421,16 +584,21 @@ export class NatsBufferedClient extends EventEmitter
 
     if ( this.stan )
     {
-      const batchItems: IBufferItem[] = this.buffer.slice( 0, this.batchSize );
+      // Shift the batch off the front of the buffer one item at a time.
+      // NOTE: CBuffer.slice() returns a plain Array so reassigning
+      // this.buffer from it would silently discard the ring buffer and
+      // its overflow handling
+      //
+      const batchItems: IBufferItem[] = [];
+      while ( batchItems.length < this.batchSize && this.buffer.length > 0 )
+      {
+        batchItems.push( this.buffer.shift() );
+      }
+
       if ( !batchItems.length ) {
         this.logger.log( '[NATS-BUFFERED-CLIENT] Buffer is empty. Going to sleep' );
         this.ticking = false;
       } else {
-
-        // Take the batch out of the buffer
-        // We will push back error items if needed
-        //
-        this.buffer = this.buffer.slice( this.batchSize );
 
         // Collect publish promises for the entire batch
         //
@@ -446,6 +614,10 @@ export class NatsBufferedClient extends EventEmitter
           publishItem
           .then( () => {
             this.logger.log( '[NATS-BUFFERED-CLIENT] Publish done', pub );
+
+            // The message reached NATS so it leaves the store
+            //
+            this.removeFromStore( pub );
           } )
           .catch( ( error ) => {
             this.logger.error( '[NATS-BUFFERED-CLIENT] Publish failed', pub, error );
@@ -519,6 +691,59 @@ export class NatsBufferedClient extends EventEmitter
   }
 
   /**
+   * Performs the actual hydration: loads persisted messages, dedups them
+   * against items already in the buffer by id, and rebuilds the buffer
+   * with hydrated items first, evicting beyond capacity via overflow().
+   * Items already in the buffer (published before connect) are skipped
+   * by id; loaded items are older than anything published this session
+   * so they go in front.
+   *
+   * NOTE: the buffer is rebuilt instead of unshifted because CBuffer
+   * evicts the NEWEST items when unshifting into a full buffer while
+   * we want to drop the oldest beyond capacity
+   *
+   * @private
+   * @returns {Promise<void>}
+   * @memberof NatsBufferedClient
+   */
+  private async doHydrate(): Promise<void>
+  {
+    const stored = await this.store!.loadAll();
+    this.hydrated = true;
+
+    // Collect the ids already in the memory buffer
+    //
+    const current: IBufferItem[] = this.buffer.toArray();
+    const currentIds             = new Set<number>();
+    current.forEach( ( item ) =>
+    {
+      if ( item.id !== undefined )
+      {
+        currentIds.add( item.id );
+      }
+    } );
+
+    // Exact id-based dedup of messages published before connect
+    //
+    const fresh = stored.filter( ( item ) => item.id === undefined || !currentIds.has( item.id ) );
+
+    // Rebuild: hydrated items in front, oldest beyond capacity dropped
+    // through the normal overflow path so the store stays in sync
+    //
+    const combined = fresh.concat( current );
+    const excess   = combined.length - this.bufferSize;
+    if ( excess > 0 )
+    {
+      combined.splice( 0, excess ).forEach( ( dropped ) => this.overflow( dropped ) );
+    }
+
+    this.buffer.empty();
+    combined.forEach( ( item ) => this.buffer.push( item ) );
+
+    this.logger.log( `[NATS-BUFFERED-CLIENT] Hydrated ${fresh.length} stored message(s)` );
+  }
+
+  /**
    * Publish item to stan using a promise
    *
    * @private
@@ -542,5 +767,27 @@ export class NatsBufferedClient extends EventEmitter
         }
       } );
     } );
+  }
+
+  /**
+   * Fire-and-forget removal of an item from the persistent store.
+   * Failure is logged and swallowed: at worst the message is republished
+   * after a restart which is acceptable since NATS streaming is
+   * at-least-once
+   *
+   * @private
+   * @param {IBufferItem} item
+   * @memberof NatsBufferedClient
+   */
+  private removeFromStore( item: IBufferItem ): void
+  {
+    if ( this.store && item.id !== undefined )
+    {
+      this.store.remove( item.id )
+      .catch( ( error ) =>
+      {
+        this.logger.error( '[NATS-BUFFERED-CLIENT] Failed to remove item from store', item.id, error );
+      } );
+    }
   }
 }
