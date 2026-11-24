@@ -1,10 +1,12 @@
 # NATS Streaming Buffered Client
 
 [![npm version](https://badge.fury.io/js/node-nats-streaming-buffered-client.svg)](https://badge.fury.io/js/node-nats-streaming-buffered-client)
-[![Travis](https://travis-ci.com/SpringTree/node-nats-streaming-buffered-client.svg?branch=master)](https://travis-ci.com/SpringTree/node-nats-streaming-buffered-client)
+[![CI](https://github.com/SpringTree/node-nats-streaming-buffered-client/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/SpringTree/node-nats-streaming-buffered-client/actions/workflows/ci.yml)
 
 This is a client for the NATS streaming server built for clients that may have an intermittent connection to the server.
 The need for this client arose for IoT devices with 4G connections and to ensure no messages are lost on server upgrades, reboots or mishaps.
+
+Note that NATS Streaming (STAN) and its [node client](https://github.com/nats-io/stan.js) are deprecated upstream in favour of NATS JetStream.
 
 ## Features
 
@@ -15,8 +17,10 @@ The need for this client arose for IoT devices with 4G connections and to ensure
 ## Usage
 
 ```bash
-npm install node-nats-streaming-buffered-client
+npm install node-nats-streaming-buffered-client node-nats-streaming
 ```
+
+The package is ESM only and requires Node.js 22 or later. `node-nats-streaming` (0.2 or 0.3) is a peer dependency.
 
 You can import the buffered client class after installing it with npm:
 
@@ -30,7 +34,7 @@ import { NatsBufferedClient } from 'node-nats-streaming-buffered-client'
 // allowing any kind of publishing.
 //
 // You can also provide an alternate logger if you want to use something
-// like bunyan. The same interface as console is asumed
+// like bunyan. Any object with console style debug, log, warn and error methods works
 //
 const bufferSize = 2000;
 const waitForInitialConnect = false;
@@ -74,7 +78,7 @@ Be very careful when supplying your own connect options to not change these unle
 ### Forced reconnects and subscriptions
 
 If the client loses connection with the nats streaming server long enough the server will decide to remove the client.
-The lower level nats layer will reconnect when a connection is restored but publishing will fail becuase the client is not known on the server.
+The lower level nats layer will reconnect when a connection is restored but publishing will fail because the client is not known on the server.
 A forced reconnect will be triggered by the buffered client when this occurs.
 This will re-register the client with the server and publishing will resume.
 
@@ -89,7 +93,70 @@ These events are:
 To prevent memory leaks be sure to call `removeAllListeners` on your old subscription(s).
 The `forced_reconnected` event is a good trigger to begin resubscribing.
 
-## NPM scripts
+## Development
 
-- `npm run test`: Run test suite
-- `npm run build`: Generate bundles and typings, create docs
+```bash
+# Install dependencies
+bun install
+```
+
+Scripts:
+
+- `bun run build`: build the ESM bundle and type declarations into `dist` with bunup
+- `bun run type-check`: type-check with TypeScript
+- `bun run lint` / `bun run lint:fix`: lint with oxlint (type-aware)
+- `bun run fmt` / `bun run fmt:fix`: check or fix formatting with oxfmt
+- `bun run test`: run the tests
+
+`test/client-demo.js` is a manual demo against a local NATS streaming server, see the comments in the file.
+
+### Testing
+
+```bash
+bun run test
+```
+
+Every test run reports coverage and fails when a source file drops below 90% of its lines or functions, see `bunfig.toml`.
+The tests do not need a NATS server. They replace `node-nats-streaming` with the fake connection in `test/helpers/fake-stan.ts`.
+
+### Technology stack
+
+- bun
+- typescript
+- node-nats-streaming
+
+### Branch strategy and protection
+
+The `master` branch has protection enabled against direct pushes.
+All changes need to be done through a reviewed pull request.
+
+The protection comes from the organization rulesets, enabled by this repository's custom properties:
+
+- `conventional-pr-title`: requires the `pull-request-title / conventional` check from `pull-request-title.yml`
+- `reviewer-approval-required`: requires an approving review and squash merges
+- `supply-chain-gates`: requires the `supply-chain / secrets`, `licences`, `code` and `quarantine` checks from `compliance.yml`
+
+### Supply chain
+
+- `.npmrc` and `bunfig.toml` refuse package versions published less than 7 days ago (package quarantine)
+- Pull requests run the shared [supply-chain gates](https://github.com/SpringTree/springtree-ci-workflows) (secrets, licences, code and package quarantine) from `compliance.yml`
+- Pull request titles are checked as conventional commits by the shared title check in `pull-request-title.yml`
+- GitHub Actions are pinned by commit SHA
+
+## Deploying
+
+Releases are fully handled by GitHub Actions; never publish from a laptop.
+
+1. Squash merge pull requests into `master`. The pull request title becomes the commit and must be a [conventional commit](https://www.conventionalcommits.org), checked by `pull-request-title.yml`
+2. [release-please](https://github.com/googleapis/release-please-action) opens or updates a release pull request with the version bump and changelog
+3. Merging the release pull request creates the tag and GitHub release, and the release workflow publishes to npm using [trusted publishing](https://docs.npmjs.com/trusted-publishers)
+
+One-time setup:
+
+- GitHub: an `npm-publish` environment that only the `master` branch may deploy to (Settings → Environments → Deployment branches). Create it before the first release: GitHub creates a missing environment without that restriction
+- npm: trusted publisher for this repository, `release.yml` and the `npm-publish` environment
+- GitHub: an organization GitHub App with contents, pull requests and issues write access on this repository; its client id as the `RELEASE_APP_CLIENT_ID` repository variable and its private key as the `RELEASE_APP_PRIVATE_KEY` repository secret
+
+## License
+
+MIT, see [LICENSE](./LICENSE).
