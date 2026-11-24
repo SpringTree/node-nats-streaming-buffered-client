@@ -1,75 +1,70 @@
 {
   "name": "node-nats-streaming-buffered-client",
-  "version": "0.0.0",
-  "description": "",
-  "keywords": [],
-  "main": "dist/node-nats-streaming-buffered-client.js",
-  "typings": "dist/types/node-nats-streaming-buffered-client.d.ts",
-  "files": [
-    "dist"
+  "version": "1.6.0",
+  "description": "A NATS Streaming client with a publish ring buffer and reconnect logic for intermittent connections",
+  "keywords": [
+    "buffer",
+    "nats",
+    "nats-streaming",
+    "stan"
   ],
+  "homepage": "https://github.com/SpringTree/node-nats-streaming-buffered-client#readme",
+  "bugs": {
+    "url": "https://github.com/SpringTree/node-nats-streaming-buffered-client/issues"
+  },
+  "license": "MIT",
   "author": "Mark Doeswijk <mark@springtree.nl>",
   "repository": {
     "type": "git",
-    "url": "https://github.com/springtree/node-nats-streaming-buffered-client"
+    "url": "git+https://github.com/SpringTree/node-nats-streaming-buffered-client.git"
   },
-  "license": "MIT",
-  "engines": {
-    "node": ">=6.0.0"
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "module": "./dist/node-nats-streaming-buffered-client.js",
+  "types": "./dist/node-nats-streaming-buffered-client.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/node-nats-streaming-buffered-client.d.ts",
+        "default": "./dist/node-nats-streaming-buffered-client.js"
+      }
+    },
+    "./package.json": "./package.json"
   },
   "scripts": {
-    "lint": "tslint -t codeFrame 'src/**/*.ts' 'test/**/*.ts'",
-    "prebuild": "rimraf dist",
-    "build": "tsc --module commonjs",
-    "docs": "typedoc --out docs --target es5 --theme minimal --mode file src",
-    "test": "nyc ava",
-    "test:watch": "jest --watch",
-    "test:prod": "npm run lint && npm run test -- --coverage --no-cache",
-    "deploy-docs": "ts-node tools/gh-pages-publish",
-    "report-coverage": "cat ./coverage/lcov.info | coveralls",
-    "semantic-release": "semantic-release",
-    "semantic-release-prepare": "ts-node tools/semantic-release-prepare"
-  },
-  "husky": {
-    "hooks": {
-      "commit-msg": "commitlint -E HUSKY_GIT_PARAMS"
-    }
-  },
-  "peerDependencies": {
-    "node-nats-streaming": "^0.2.2"
-  },
-  "devDependencies": {
-    "@commitlint/cli": "^8.2.0",
-    "@commitlint/config-angular": "^8.2.0",
-    "@types/jest": "^24.0.23",
-    "@types/node": "^12.12.17",
-    "ava": "^2.4.0",
-    "colors": "^1.4.0",
-    "coveralls": "^3.0.9",
-    "cross-env": "^6.0.3",
-    "husky": "^3.1.0",
-    "lint-staged": "^9.5.0",
-    "lodash.camelcase": "^4.3.0",
-    "node-nats-streaming": "^0.2.6",
-    "nyc": "^14.1.1",
-    "prompt": "^1.0.0",
-    "replace-in-file": "^5.0.2",
-    "rimraf": "^3.0.0",
-    "rollup": "^1.27.13",
-    "rollup-plugin-commonjs": "^10.1.0",
-    "rollup-plugin-json": "^4.0.0",
-    "rollup-plugin-node-resolve": "^5.2.0",
-    "rollup-plugin-sourcemaps": "^0.4.2",
-    "rollup-plugin-typescript2": "^0.25.3",
-    "semantic-release": "^15.13.31",
-    "ts-node": "^8.5.4",
-    "tslint": "^5.20.1",
-    "tslint-config-standard": "^9.0.0",
-    "typedoc": "^0.15.5",
-    "typescript": "^3.7.3",
-    "validate-commit-msg": "^2.14.0"
+    "build": "bunup",
+    "dev": "bunup --watch",
+    "fmt": "oxfmt --check",
+    "fmt:fix": "oxfmt",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "prepare": "husky",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "CBuffer": "^2.0.0"
+    "CBuffer": "^2.2.0"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.2.4",
+    "@commitlint/config-conventional": "^21.2.4",
+    "@types/bun": "^1.4.4",
+    "bunup": "^0.16.32",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.1",
+    "node-nats-streaming": "^0.3.2",
+    "oxfmt": "^0.79.0",
+    "oxlint": "^1.94.0",
+    "oxlint-tsgolint": "^7.0.2007",
+    "typescript": "^7.0.2"
+  },
+  "peerDependencies": {
+    "node-nats-streaming": "^0.2.2 || ^0.3.0"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

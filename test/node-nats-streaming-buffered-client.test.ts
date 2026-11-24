@@ -1,24 +1,16 @@
-import ava from 'ava';
-import { NatsBufferedClient } from '../src/node-nats-streaming-buffered-client';
+import { expect, test } from "bun:test";
+import { NatsBufferedClient } from "../src/node-nats-streaming-buffered-client";
 
-/**
- * Library test
- */
-ava( 'NatsBufferedClient is instantiable', ( test ) =>
-{
-  test.assert( new NatsBufferedClient() instanceof NatsBufferedClient );
-} );
+test("NatsBufferedClient is instantiable", () => {
+  expect(new NatsBufferedClient()).toBeInstanceOf(NatsBufferedClient);
+});
 
-ava( 'NatsBufferedClient is instantiable with buffer size', ( test ) =>
-{
-  test.assert( new NatsBufferedClient( 100 ) instanceof NatsBufferedClient );
-} );
+test("NatsBufferedClient is instantiable with buffer size", () => {
+  expect(new NatsBufferedClient(100)).toBeInstanceOf(NatsBufferedClient);
+});
 
-ava( 'NatsBufferedClient is instantiable and can publish', ( test ) =>
-{
+test("NatsBufferedClient is instantiable and can publish", () => {
   const client = new NatsBufferedClient();
 
-  test.assert( client instanceof NatsBufferedClient );
-  test.assert( client.publish );
-  test.assert( client.publish( 'test', 'test' ) > 0 );
-} );
+  expect(client.publish("test", "test")).toBeGreaterThan(0);
+});

@@ -1,12 +1,19 @@
+# Dependencies and build output
 node_modules
-coverage
-.nyc_output
-.DS_Store
-*.log
-.vscode
-.idea
 dist
-compiled
-.awcache
-.rpt2_cache
-docs
+coverage
+
+# Local environment files
+.env
+.env.*.local
+.env.local
+
+# Editor and OS files
+.DS_Store
+.idea
+
+# Logs
+*.log
+
+# Superpowers spec and plan files are local only
+docs/superpowers/
