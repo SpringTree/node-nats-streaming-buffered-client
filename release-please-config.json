@@ -1,0 +1,11 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "c522e127a429c281ce043038ef3fc996dde7563b",
+  "include-component-in-tag": false,
+  "packages": {
+    ".": {
+      "package-name": "node-nats-streaming-buffered-client",
+      "release-type": "node"
+    }
+  }
+}
