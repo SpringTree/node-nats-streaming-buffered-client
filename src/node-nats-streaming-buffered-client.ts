@@ -101,7 +101,7 @@ export class NatsBufferedClient extends EventEmitter {
    *
    * @param {number} [bufferSize=10] Size of our publish buffer
    * @param {boolean} [waitForInitialConnection=false] Allows publishing to the buffer before initial connect
-   * @param {*} [logger=console] The console logger to use
+   * @param {*} [logger=console] The logger to use, any object with console style debug, log, warn and error methods
    * @param {number} [reconnectDelay=5000] If reconnect fails retry after this amount of time. Default is 5 seconds
    * @param {number} [batchSize=10] Amount of items to publish in 1 tick
    * @memberof NatsBufferedClient
@@ -109,7 +109,7 @@ export class NatsBufferedClient extends EventEmitter {
   constructor(
     private bufferSize: number = 10,
     private waitForInitialConnection = false,
-    logger = console,
+    logger: Pick<Console, "debug" | "error" | "log" | "warn"> = console,
     private reconnectDelay = 5000,
     private batchSize = 10,
   ) {
