@@ -100,6 +100,21 @@ describe("publish", () => {
     expect(dropped).toEqual([{ data: "first", subject: "subject" }]);
   });
 
+  test("successfully drop the oldest message when the buffer is full after a publish batch", async () => {
+    const { client } = createClient(2);
+    await client.connect("cluster", "client");
+    client.publish("subject", "sent");
+    await waitFor(() => currentStan().published.length === 1);
+    await client.disconnect();
+
+    client.publish("subject", "first");
+    client.publish("subject", "second");
+    client.publish("subject", "third");
+
+    expect(client.count()).toBe(2);
+    expect(client.utilisation()).toBe(100);
+  });
+
   test("successfully log a dropped message with the default overflow handler", () => {
     const { client, lines } = createClient(1);
 

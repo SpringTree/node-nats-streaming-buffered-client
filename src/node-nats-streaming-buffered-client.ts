@@ -1,9 +1,6 @@
-// CBuffer is CommonJS (`module.exports = CBuffer`): a default import works in Bun and in Node ESM,
-// a namespace import does not
-//
-import CBuffer from "CBuffer";
 import { EventEmitter } from "node:events";
 import * as nats from "node-nats-streaming";
+import { BoundedBuffer } from "./bounded-buffer";
 
 /**
  * The type of objects we push onto our buffer
@@ -35,10 +32,10 @@ export class NatsBufferedClient extends EventEmitter {
    * Our ring buffer instance
    *
    * @private
-   * @type {*}
+   * @type {BoundedBuffer<IBufferItem>}
    * @memberof NatsBufferedClient
    */
-  private buffer: any;
+  private buffer: BoundedBuffer<IBufferItem>;
 
   /**
    * The name of the cluster we're connecting to
@@ -136,8 +133,7 @@ export class NatsBufferedClient extends EventEmitter {
 
     // Initialize our ring buffer with the requested size
     //
-    this.buffer = new CBuffer(bufferSize);
-    this.buffer.overflow = (data: any) => this.overflow(data);
+    this.buffer = new BoundedBuffer<IBufferItem>(bufferSize, (data) => this.overflow(data));
 
     // Close NATS server connection on exit
     //
@@ -410,16 +406,14 @@ export class NatsBufferedClient extends EventEmitter {
     this.ticking = true;
 
     if (this.stan) {
-      const batchItems: IBufferItem[] = this.buffer.slice(0, this.batchSize);
+      // Take the batch out of the buffer
+      // We will push back error items if needed
+      //
+      const batchItems = this.buffer.take(this.batchSize);
       if (!batchItems.length) {
         this.logger.log("[NATS-BUFFERED-CLIENT] Buffer is empty. Going to sleep");
         this.ticking = false;
       } else {
-        // Take the batch out of the buffer
-        // We will push back error items if needed
-        //
-        this.buffer = this.buffer.slice(this.batchSize);
-
         // Collect publish promises for the entire batch
         //
         const publishBatch: Array<Promise<IBufferItem>> = [];
