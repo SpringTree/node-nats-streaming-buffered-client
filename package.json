@@ -1,6 +1,6 @@
 {
   "name": "node-nats-streaming-buffered-client",
-  "version": "1.6.0",
+  "version": "2.0.0",
   "description": "A NATS Streaming client with a publish ring buffer and reconnect logic for intermittent connections",
   "keywords": [
     "buffer",
